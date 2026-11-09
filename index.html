@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1031 情境模擬競賽考後報告</title>
+<link rel="stylesheet" href="deck.css?v=1">
+</head>
+<body data-slide="cover">
+<canvas id="stage"></canvas>
+<div id="shade"></div>
+<div id="flash"></div>
+<div class="vignette"></div>
+
+<div id="deck">
+
+  <!-- ==================== 1 封面 ==================== -->
+  <section class="slide" data-id="cover">
+    <div class="cover-title">
+      <div class="kicker">NCMEA 醫事放射組第二場｜2026.10.31 林口長庚</div>
+      <h1><span>情境模擬競賽</span><span class="hl">考後報告</span></h1>
+      <p class="lead">當天流程 × 考場實況 × 教案考點 × TRM</p>
+    </div>
+    <div class="start-hint f">按 <kbd>→</kbd> 開始</div>
+  </section>
+
+  <!-- ==================== 2 報到 ==================== -->
+  <section class="slide" data-id="checkin" data-chip="第一幕｜當天流程">
+    <h2><em>12:40</em>　報到</h2>
+    <div class="side bl">
+      <div class="card time-card f" data-s="1">
+        <div class="clock">12:40</div>
+        <div><b>到報到區報到</b><span>從報到入口進入，前往報到區</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 3 入闈 ==================== -->
+  <section class="slide" data-id="team" data-chip="第一幕｜當天流程">
+    <h2>入闈：每隊一間<em>獨立教室</em></h2>
+    <div class="side">
+      <div class="card row f" data-s="1">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M9 21v-6h6v6"/></svg></span>
+        <div><b>每個隊伍一間獨立房間</b><span>團隊入闈教室 1~3、6~8</span></div>
+      </div>
+      <div class="card row f" data-s="2">
+        <span class="ic amber"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/><path d="M16 12h6m-2.5-2.5L22 12l-2.5 2.5"/></svg></span>
+        <div><b>帶隊老師離開</b><span>之後只剩參賽隊員</span></div>
+      </div>
+      <div class="card row locker f" data-s="3">
+        <span class="ic red"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.2"/><path d="M10.5 18.5h3"/><path d="M3 3l18 18"/></svg></span>
+        <div><b>手機、3C 設備全部收走</b>
+          <div class="tray">
+            <i class="phone"></i><i class="phone"></i><i class="phone"></i><i class="phone tablet"></i>
+            <span class="locker-box"><i class="stamp">已收走</i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 4 觀摩教室集合 ==================== -->
+  <section class="slide" data-id="obs" data-chip="第一幕｜當天流程">
+    <h2>觀摩教室<em>集合</em></h2>
+    <div class="side">
+      <div class="card row f" data-s="1">
+        <span class="ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="8" r="3"/><path d="M2.5 20c0-3.3 2.4-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M13 14.7c1-.8 2.2-1.2 3.5-1.2 3.1 0 5.5 2.2 5.5 5.5"/></svg></span>
+        <div><b>參賽隊員在觀摩教室集合</b><span>像大禮堂，很多座位給帶隊老師與參賽隊員坐</span></div>
+      </div>
+      <div class="card row f" data-s="2">
+        <span class="ic red"><svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="1.6"/><path d="M8 20.5h8M12 16.5v4"/><circle cx="6.5" cy="7.8" r="1" fill="currentColor"/></svg></span>
+        <div><b>前方大螢幕</b><span>考官說明參賽注意事項</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 5 考官說明（大螢幕播放參賽注意事項） ==================== -->
+  <section class="slide" data-id="brief" data-chip="第一幕｜當天流程">
+    <h2 class="small">考官說明：參賽<em>注意事項</em></h2>
+  </section>
+
+  <!-- ==================== 6 看考場（第一人稱） ==================== -->
+  <section class="slide" data-id="explore" data-chip="第一幕｜當天流程">
+    <h2 class="small">看考場：每間攝影室 <em>3 分鐘</em></h2>
+    <div class="ex-loc"><b id="exRoom">CT 室（檢查室 A）</b><span id="exTimer"></span></div>
+    <div class="ex-map"><canvas id="minimap" width="300" height="324"></canvas></div>
+    <div class="ex-help"><kbd>↑</kbd><kbd>↓</kbd> 前進後退　<kbd>←</kbd><kbd>→</kbd> 轉向　<kbd>A</kbd><kbd>D</kbd> 側移　<kbd>Shift</kbd> 加速　滑鼠拖曳看四周　｜　<kbd>Enter</kbd> 下一頁</div>
+  </section>
+
+  <!-- ==================== 7 回入闈教室等待 ==================== -->
+  <section class="slide" data-id="back" data-chip="第一幕｜當天流程">
+    <h2>看完考場，回入闈教室<em>等待</em></h2>
+    <div class="side">
+      <div class="card row f" data-s="1">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M9 21v-6h6v6"/></svg></span>
+        <div><b>回到自己隊伍的入闈教室</b><span>兩個考場都看完，各隊回自己的小房間</span></div>
+      </div>
+      <div class="card row f" data-s="2">
+        <span class="ic amber hourglass"><svg viewBox="0 0 24 24"><path d="M6.5 3h11M6.5 21h11"/><path d="M7.5 3c0 4.5 4.5 6 4.5 9s-4.5 4.5-4.5 9M16.5 3c0 4.5-4.5 6-4.5 9s4.5 4.5 4.5 9"/><path d="M9.5 19.2h5l-2.5-2.4z" fill="currentColor"/></svg></span>
+        <div><b>休息、等待叫號</b><span>沒有手機，只能在房間裡等</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 8 考試開始：讀題幹、兩兩分組 ==================== -->
+  <section class="slide" data-id="exam" data-chip="第二幕｜考試開始">
+    <h2>考試開始：<em>30 秒</em>讀題幹</h2>
+    <div class="side left">
+      <div class="card stem f" data-s="1">
+        <div class="stem-top"><b>題幹</b><span class="stem-timer" id="stemTimer">0:30</span></div>
+        <p>一對父子來放射科做檢查。<br>兒子要做電腦斷層，需打對比劑；<br>父親失智，要做 Brain MRI，不打對比劑。</p>
+      </div>
+      <div class="card row f" data-s="2">
+        <span class="ic amber"><svg viewBox="0 0 24 24"><circle cx="8" cy="6.5" r="2.8"/><path d="M3 20c0-3.6 2.2-6.2 5-6.2s5 2.6 5 6.2"/><path d="M14 9.5h7M14 13.5h5"/></svg></span>
+        <div><b>考官：兩兩分組</b><span>請自行選擇要去 CT 或 MRI</span></div>
+      </div>
+      <div class="card split f" data-s="3">
+        <div class="pair ct"><b>CT 室</b><span>放射師＋護理師<br>&nbsp;</span></div>
+        <div class="pair mri"><b>MRI 等候區</b><span>放射師 2 人<br>在安妮旁說明</span></div>
+      </div>
+      <div class="card row f" data-s="4">
+        <span class="ic"><svg viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.6"/><path d="M4 21v-6.5c0-2 1.3-3.5 3-3.5s3 1.5 3 3.5V21"/><path d="M13 12h8m-3-3 3 3-3 3"/></svg></span>
+        <div><b>標準病人聽完說明，才去 CT 室</b><span>說明時標準病人在 MRI 這邊一起聽</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 9 兩間考場同時進行（雙畫面） ==================== -->
+  <section class="slide" data-id="dual" data-chip="第二幕｜考試開始">
+    <div class="dual-line"></div>
+    <div class="dual-title">兩間考場<em>同時進行</em></div>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 等候區（檢查室 B）</div>
+    <ol class="dual-list l">
+      <li data-s="0"><b>病人辨識</b></li>
+      <li data-s="1"><b>解釋這次的檢查</b></li>
+      <li data-s="2"><b>躺上 CT 床，護理師打上針頭</b><span>打好針後，接上對比劑管路</span></li>
+      <li data-s="3"><b>檢查前衛教</b><span>由放射師執行</span></li>
+    </ol>
+    <ol class="dual-list r">
+      <li data-s="0"><b>病人辨識</b></li>
+      <li data-s="1"><b>金屬探測器探測</b></li>
+      <li data-s="2"><b>確認有無心臟節律器</b><span>病人失智無法回答 → 到系統 PACS 看 X 光片</span></li>
+      <li data-s="3"><b>人工判別金屬異物</b><span>金屬探測器測不出來的，要用人工判別</span></li>
+      <li data-s="4"><b>移除頸部痠痛貼布、口袋暖暖包</b><span>可能有金屬成分，移除後放在檢查控制台上</span></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 10 執行檢查與影像判讀（雙畫面） ==================== -->
+  <section class="slide" data-id="scan" data-chip="第二幕｜考試進行">
+    <div class="dual-line"></div>
+    <div class="dual-title">執行檢查與<em>影像判讀</em></div>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 室（檢查室 B）</div>
+    <div class="scan-win l">
+      <div class="sw-head">CT 控制台影像<small>示意圖</small></div>
+      <div class="sw-imgs">
+        <figure class="expect"><canvas id="ctExpect" width="300" height="230"></canvas><figcaption>應有：血管、器官被打亮</figcaption></figure>
+        <figure class="actual"><canvas id="ctActual" width="300" height="230"></canvas><figcaption>實際：沒有藥物進來</figcaption></figure>
+      </div>
+      <div class="alert ct">影像沒有對比劑進來 → 懷疑 IV Loss</div>
+    </div>
+    <div class="scan-win r">
+      <div class="sw-head">MRI 控制台影像<small>示意圖</small></div>
+      <div class="sw-imgs">
+        <figure class="clear"><canvas id="mriClear" width="300" height="230"></canvas><figcaption>Brain T2：影像清楚</figcaption></figure>
+        <figure class="blur"><canvas id="mriBlur" width="300" height="230"></canvas><figcaption>影像模糊、出現重影</figcaption></figure>
+      </div>
+      <div class="alert mri a1">影像模糊：病人躁動</div>
+      <div class="alert mri a2">■ 立即停止掃描</div>
+    </div>
+    <ol class="dual-list l">
+      <li><b>開始檢查：放射師、護理師回到控制台</b></li>
+      <li><b>打對比劑，開始掃描</b></li>
+      <li><b>影像上沒有藥物進來</b><span>要懷疑 IV Loss</span></li>
+    </ol>
+    <ol class="dual-list r">
+      <li><b>從等候區推進 MRI 室，過床到 MRI 床</b></li>
+      <li><b>送進磁體，開始掃描</b></li>
+      <li><b>影像模糊</b><span>病人在裡面躁動</span></li>
+      <li><b>立即停止掃描</b></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 11 發現異常後的處置與交班（雙畫面） ==================== -->
+  <section class="slide" data-id="handle" data-chip="第二幕｜考試進行">
+    <div class="dual-line"></div>
+    <div class="dual-title">發現異常後的<em>處置與交班</em></div>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 室（檢查室 B）</div>
+    <ol class="dual-list l">
+      <li><b>停止檢查</b></li>
+      <li><b>確認 IV Loss</b><span>詢問病人：手部有腫、有痛</span></li>
+      <li><b>放射師跟臨床交班</b><span>交班內容：是否加照 X 光，看對比劑滲漏範圍多大</span></li>
+      <li><b>護理師衛教 IV Loss 的處置</b></li>
+    </ol>
+    <ol class="dual-list r">
+      <li><b>停止檢查，進去看病人狀況</b><span>病人在裡面躁動</span></li>
+      <li><b>聯絡臨床醫師</b><span>確認是否繼續執行這個檢查</span></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 12 MRI 病人狀況改變（雙畫面，右邊 MRI 放大） ==================== -->
+  <section class="slide wide" data-id="arrest" data-chip="第二幕｜考試進行">
+    <div class="dual-line"></div>
+    <div class="dual-title">MRI 病人<em>狀況改變</em></div>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 室 → 等候區</div>
+    <div class="mon-win"><div class="mw-head">安妮的生理監視器<small>示意</small></div><div class="mw-slot"></div></div>
+    <ol class="dual-list l">
+      <li data-s="0"><b>標準病人因 IV Loss 跟放射師爭執</b></li>
+    </ol>
+    <ol class="dual-list r">
+      <li data-s="0"><b>監視器出現 AF，心跳慢慢降低</b><span>從 78 慢慢掉到 40</span></li>
+      <li data-s="1"><b>意識改變 → 推到 MRI 室外的等候區</b><span>連同生理監視器一起推出來</span></li>
+      <li data-s="2"><b>心跳停止</b></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 13 叫叫 CABD 急救（雙畫面，右邊 MRI 放大） ==================== -->
+  <section class="slide wide" data-id="cpr" data-chip="第二幕｜考試進行">
+    <div class="dual-line"></div>
+    <div class="dual-title">等候區急救：<em>叫叫 CABD</em></div>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 等候區</div>
+    <div class="mon-win"><div class="mw-head">安妮的生理監視器<small>示意</small></div><div class="mw-slot"></div></div>
+    <div class="bcast">📢 全院廣播：999 急救</div>
+    <ol class="dual-list l">
+      <li data-s="0"><b>標準病人持續跟放射師爭執</b></li>
+      <li data-s="4"><b>全院廣播後，護理師離開 CT 室去支援</b></li>
+    </ol>
+    <ol class="dual-list r compact">
+      <li data-s="0"><b>叫：拍肩叫喚病人</b></li>
+      <li data-s="1"><b>叫：另一位放射師撥 999</b></li>
+      <li data-s="2"><b>C：開始壓胸</b></li>
+      <li data-s="3"><b>撥完 999 → 拿背板、BVM</b><span>接上氧氣，開到最大</span></li>
+      <li data-s="4"><b>院內 999 啟動、全院廣播</b><span>隔壁 CT 室的護理師過來支援</span></li>
+      <li data-s="5"><b>放射師跟護理師交班</b><span>並把領導交給護理師</span></li>
+      <li data-s="6"><b>D：貼上貼片判讀</b><span>沒有電擊</span></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 14 家屬大鬧＋急救團隊交班（雙畫面，右邊 MRI 放大） ==================== -->
+  <section class="slide wide" data-id="family" data-chip="第二幕｜考試進行">
+    <div class="dual-line"></div>
+    <div class="dual-title">家屬大鬧＋<em>急救團隊交班</em></div>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 等候區</div>
+    <div class="mon-win"><div class="mw-head">安妮的生理監視器<small>示意</small></div><div class="mw-slot"></div></div>
+    <ol class="dual-list l">
+      <li data-s="0"><b>兒子得知父親在急救，情緒激動</b><span>CT 的放射師先安撫兒子</span></li>
+      <li data-s="1"><b>兒子太激動，衝出 CT 室</b></li>
+    </ol>
+    <ol class="dual-list r">
+      <li data-s="0"><b>持續急救，護理師是領導者</b></li>
+      <li data-s="2"><b>兒子衝進等候區，大鬧急救現場</b><span>CT 的放射師追過來安撫</span></li>
+      <li data-s="3"><b>院內 999 急救團隊到場</b></li>
+      <li data-s="4"><b>護理師跟急救團隊交班</b></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 15 考試結束：Debrief（考官 4 位、考生 4 位隔著長桌面對面） ==================== -->
+  <section class="slide" data-id="debrief" data-chip="第二幕｜考試結束">
+    <h2>考試結束：<em>Debrief</em></h2>
+    <div class="db-timer"><b>3:00</b><span>團隊自行 debrief</span><small>快轉</small></div>
+    <ol class="card db-list">
+      <li data-s="0"><div><b>4 位考官與 4 位考生進入 Debrief 教室</b><span>隔著長桌面對面坐，桌上有倒數碼錶</span></div></li>
+      <li data-s="1"><div><b>前 3 分鐘：團隊自行 debrief</b><span>用 ERCP 循環</span>
+        <div class="ercp"><i><b>E</b>體驗<small>發生了什麼？</small></i><i><b>R</b>反思<small>為什麼會這樣？</small></i><i><b>C</b>概念化<small>連結理論與 SOP</small></i><i><b>P</b>行動規劃<small>下次怎麼做？</small></i></div></div></li>
+      <li data-s="2"><div><b>最後 2 分鐘：考官問答</b>
+        <div class="qa"><p><b>Q1</b>作業中如何精準去除金屬異物？</p><p><b>Q2</b>MRI 遇到急救，過程中需要注意什麼事項？</p></div></div></li>
+      <li data-s="3"><div><b>全程結束，考生回到觀摩教室休息</b></div></li>
+    </ol>
+  </section>
+
+  <!-- ==================== 15 TRM 評核重點（單一 3D 鏡頭：等候區） ==================== -->
+  <section class="slide" data-id="trm" data-chip="第三幕｜評核重點">
+    <h2>TRM <em>評核重點</em></h2>
+    <div class="trm-panel">
+      <div class="card trm-card lead">
+        <div class="tc-head"><span class="tc-ic">👑</span><b>領導</b><small>急救過程中有沒有領導者出現，負責指揮與分工。</small></div>
+        <ol class="chain">
+          <li class="f" data-s="1"><b>護理師來之前</b><span>壓胸的放射師是領導者</span></li>
+          <li class="f" data-s="2"><b>護理師從 CT 室來支援</b><span>放射師交班，並把領導交給護理師</span></li>
+          <li class="f" data-s="3"><b>院內 999 急救團隊到場</b><span>護理師跟醫師交班完，考試結束</span></li>
+        </ol>
+      </div>
+      <div class="card trm-card cpr">
+        <div class="tc-head"><span class="tc-ic">❤️</span><b>高品質急救</b><small>急救過程是否為高品質的急救。</small></div>
+        <ul class="qcpr">
+          <li class="f" data-s="4"><b>速率</b>每分鐘 100–120 下</li>
+          <li class="f" data-s="4"><b>深度</b>5–6 公分</li>
+          <li class="f" data-s="4"><b>回彈</b>每次壓完讓胸廓完全回彈</li>
+          <li class="f" data-s="4"><b>少中斷</b>中斷不超過 10 秒</li>
+          <li class="f" data-s="4"><b>通氣</b>壓胸與通氣 30：2，避免過度換氣</li>
+          <li class="f" data-s="4"><b>換手</b>每 2 分鐘換手壓胸，避免疲勞</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 16 ISBAR 五個交班時機（單一 3D 鏡頭：重播當時那一幕） ==================== -->
+  <section class="slide" data-id="isbar" data-chip="第三幕｜評核重點">
+    <h2>ISBAR <em>五個交班時機</em></h2>
+    <div class="isbar-panel">
+      <div class="card isbar-key">
+        <span><b>I</b>確認身分<small>Identify</small></span>
+        <span><b>S</b>現況<small>Situation</small></span>
+        <span><b>B</b>背景<small>Background</small></span>
+        <span><b>A</b>評估<small>Assessment</small></span>
+        <span><b>R</b>建議<small>Recommendation</small></span>
+      </div>
+      <ol class="card isbar-list">
+        <li data-s="1"><i class="rt mri">MRI 室</i><div><b>病人躁動</b><span>聯絡臨床醫師，確認是否繼續執行這個檢查</span></div></li>
+        <li data-s="2"><i class="rt mri">MRI 室</i><div><b>護理人員從 CT 室過來支援</b><span>放射師交班，並把領導交給護理師</span></div></li>
+        <li data-s="3"><i class="rt mri">MRI 室</i><div><b>急救團隊到場</b><span>護理師跟醫師交班</span></div></li>
+        <li data-s="4"><i class="rt ct">CT 室</i><div><b>IV loss</b><span>告知臨床醫師並交班</span></div></li>
+        <li data-s="5"><i class="rt ct">CT 室</i><div><b>IV loss 後續</b><span>衛教病人接下來要怎麼處置</span></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ==================== 17 電影片尾：特別感謝（進頁自動播；→ 直接跳到最後一張） ==================== -->
+  <section class="slide credits" data-id="credits">
+    <div class="cr-dim"></div>
+    <div class="cr-bar top"></div><div class="cr-bar bot"></div>
+    <div class="cr-roll">
+      <div class="cr-head">特別感謝</div>
+      <div class="cr-sub">比賽之前陪我們演練的每一位</div>
+      <div class="cr-group"><div class="cr-role">標準病人扮演</div><div class="cr-name">邢乃驊</div><div class="cr-name">林家豪</div></div>
+      <div class="cr-group"><div class="cr-role">演練考官</div><div class="cr-name">許書維</div><div class="cr-name">曾妍鳳</div></div>
+      <div class="cr-group"><div class="cr-role">護理師</div><div class="cr-name">楊曉鏵</div></div>
+    </div>
+    <div class="cr-end">
+      <div class="kicker">NCMEA 醫事放射組第二場｜2026.10.31 林口長庚</div>
+      <h1><span>報告完畢</span><span class="hl">謝謝聆聽</span></h1>
+    </div>
+    <canvas class="cr-fw" width="1600" height="900"></canvas>
+  </section>
+
+</div>
+
+<div id="hud">
+  <span id="chip"></span>
+  <span id="pageno"></span>
+  <button id="mute" title="音效（M）"><svg viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z"/><path class="w1" d="M16.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M19 6.5a7.5 7.5 0 0 1 0 11"/><path class="x" d="M16.5 9.5l5 5m0-5-5 5"/></svg></button>
+</div>
+<div id="progress"><i></i></div>
+
+<script src="dist/deck.js?v=1"></script>
+</body>
+</html>
