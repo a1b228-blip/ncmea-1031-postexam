@@ -363,16 +363,56 @@ export const ANNE_LEADS = {
   ecg: [[-25, -5, 0xf8fafc], [-25, 5, 0x111827], [-8, -5, 0x16a34a], [-8, 5, 0xdc2626]],
   spo2: [1, 2.6, 10], cuff: [-20, 2.4, -10],
 };
-// 安妮（CPR 假人）：仰躺，長軸沿 x，頭在 -x
+// 安妮（CPR 急救假人，Resusci Anne 外型）：仰躺，長軸沿 x，頭在 -x、臉朝上
+// 塑膠膚色＋模具臉（閉眼、微張的嘴）＋模具頭髮；藍色運動服外套敞開露出胸口（貼片、壓胸位置），藍色運動褲＋白色側條
+// 尺寸與接點（胸口高度、手指、上臂、頭）跟原本一樣，導線、BVM、背板、壓胸動畫都不用重新對位
 export function anne() {
-  const g = new THREE.Group(), skin = M(0xf2c9a8, { roughness: 0.6 }), suit = M(0x1d4ed8, { roughness: 0.7 }), hair = M(0x6b4f2a, { roughness: 0.9 });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(5, 24, 18), skin); head.scale.set(1.05, 0.95, 0.9); head.position.set(-36, 4.6, 0); g.add(head);
-  const h = new THREE.Mesh(new THREE.SphereGeometry(5.1, 24, 18, 0, Math.PI * 2, 0, Math.PI / 2), hair); h.rotation.z = Math.PI / 2; h.position.set(-37, 4.6, 0); g.add(h);
-  const neck = at(cylM(2.2, 2.4, 5, skin), -30, 3.2, 0); neck.rotation.z = Math.PI / 2; g.add(neck);   // 頸
-  g.add(at(rbox(24, 7, 16, 3, skin), -16, 3.8, 0));                                    // 胸部（CPR 按壓處）
-  g.add(at(rbox(12, 6.6, 15, 3, suit), 1, 3.6, 0));                                    // 腹部／骨盆
-  for (const z of [-4, 4]) { const leg = cylM(2.8, 2.2, 32, suit, 16); leg.rotation.z = Math.PI / 2; leg.position.set(22, 3, z); g.add(leg); g.add(at(rbox(3, 6, 4, 1, M(0x111827)), 39, 4.5, z)); }
-  for (const z of [-10, 10]) { const arm = cylM(2, 1.6, 24, skin, 14); arm.rotation.z = Math.PI / 2; arm.position.set(-12, 2.4, z); g.add(arm); }
+  const g = new THREE.Group();
+  const skin = M(0xeccbb0, { roughness: 0.42, metalness: 0.02 }), suit = M(0x1d4ed8, { roughness: 0.75 }), stripe = M(0xf8fafc, { roughness: 0.6 });
+  const hair = M(0x5b4126, { roughness: 0.55 }), line = M(0x6b4a33, { roughness: 0.6 }), lip = M(0xc98b7f, { roughness: 0.45 }), dark = M(0x3b1f1a, { roughness: 0.7 });
+  const add = (m) => { g.add(m); return m; }, rz = (m) => { m.rotation.z = Math.PI / 2; return m; };
+  const ell = (r, sx, sy, sz, m, x, y, z) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), m); o.scale.set(sx, sy, sz); return add(at(o, x, y, z)); };
+  // 頭：橢圓頭型＋模具臉（下巴朝 +x、額頭朝 -x）；五官高度依頭型曲面（半徑 5.4×4.6×4.4）貼齊
+  ell(5, 1.08, 0.92, 0.88, skin, -36, 4.6, 0);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(5.15, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);   // 模具頭髮：蓋住頭頂與後腦
+  cap.scale.set(1.08, 0.92, 0.9); cap.rotation.z = Math.PI / 2 + 0.35; cap.position.set(-36.6, 4.3, 0); add(cap);
+  for (const z of [-1.9, 1.9]) {
+    add(at(rz(cylM(0.17, 0.17, 1.8, line, 6)), -37.2, 8.78, z)).rotation.set(Math.PI / 2, 0, 0.12 * Math.sign(z));   // 閉著的眼睛（眼線）
+    ell(1, 0.5, 0.3, 1.05, skin, -37.45, 8.5, z);                                                                  // 眼皮隆起
+    add(at(rz(cylM(0.14, 0.14, 1.9, line, 6)), -38.7, 8.12, z)).rotation.set(Math.PI / 2, 0, 0.1 * Math.sign(z));                       // 眉毛
+    ell(1.1, 0.8, 1.2, 0.45, skin, -36.4, 4.7, z * 2.45);                                                           // 耳朵
+  }
+  ell(0.95, 1.6, 0.9, 0.85, skin, -35.5, 9.25, 0);                                                                   // 鼻子
+  ell(1, 0.55, 0.3, 1.45, lip, -33.5, 8.55, 0);                                                                     // 嘴唇
+  ell(0.6, 0.35, 0.2, 1.05, dark, -33.45, 8.78, 0);                                                                  // 微張的嘴（人工呼吸口）
+  ell(1.4, 1, 0.7, 1.3, skin, -32, 7.1, 0);                                                                          // 下巴
+  add(at(rz(cylM(2.5, 2.7, 5, skin)), -30, 3.2, 0));                                                                 // 頸
+  // 胸口（CPR 按壓處）：塑膠皮膚＋乳頭、胸骨凹痕；外套從兩側敞開
+  add(at(rbox(24, 7, 16, 3, skin), -16, 3.8, 0));
+  for (const z of [-3.6, 3.6]) ell(0.45, 1, 0.3, 1, M(0xc9967e, { roughness: 0.5 }), -14, 7.3, z);
+  add(at(new THREE.Mesh(new THREE.BoxGeometry(5, 0.15, 0.5), M(0xdcb79b, { roughness: 0.5 })), -21, 7.32, 0));
+  for (const s of [-1, 1]) {
+    add(at(rbox(25, 7.6, 3.2, 1.4, suit), -15.5, 3.8, s * 7.4));                       // 外套前襟（兩側）
+    add(at(new THREE.Mesh(new THREE.BoxGeometry(25, 0.5, 0.35), stripe), -15.5, 7.45, s * 5.9));   // 拉鍊邊條
+    ell(3.2, 1.1, 0.95, 1, suit, -26, 3.4, s * 8.6);                                   // 肩膀
+    add(at(rbox(4, 2, 5.5, 0.8, suit), -28.6, 5.2, s * 4.4)).rotation.y = s * 0.35;    // 外套領子
+  }
+  add(at(rbox(12, 6.6, 15, 3, suit), 1, 3.6, 0));                                       // 腹部（外套下擺）
+  add(at(new THREE.Mesh(new THREE.BoxGeometry(1.4, 6.8, 15.4), stripe), 6.6, 3.6, 0));   // 腰部鬆緊帶
+  // 雙腳：藍色運動褲＋白色側條＋黑色球鞋
+  for (const z of [-4, 4]) {
+    add(at(rz(cylM(2.8, 2.2, 32, suit, 16)), 22, 3, z));
+    add(at(new THREE.Mesh(new THREE.BoxGeometry(31, 0.45, 0.45), stripe), 22, 3.4, z + Math.sign(z) * 2.45));
+    add(at(rbox(3.4, 6.2, 4.2, 1.2, M(0x111827, { roughness: 0.5 })), 39, 4.5, z));
+    add(at(rbox(3.6, 1, 4.4, 0.4, stripe), 39.2, 1.6, z));                               // 鞋底
+  }
+  // 雙手：藍色袖子＋白色袖口條＋塑膠手掌（血氧夾在右手指、血壓袖帶在左上臂，位置不變）
+  for (const z of [-10, 10]) {
+    add(at(rz(cylM(2.1, 1.7, 22, suit, 14)), -13, 2.4, z));
+    add(at(rz(cylM(1.75, 1.75, 0.9, stripe, 14)), -1.6, 2.4, z));
+    ell(1.7, 1.45, 0.55, 1, skin, 1.2, 2.2, z);
+    ell(0.5, 1.6, 0.6, 0.6, skin, 0.4, 2.6, z + Math.sign(z) * 1.5);                    // 大拇指
+  }
   // 已接好生理監視器：胸前 4 片 EKG 電極、手指血氧夾、上臂血壓袖帶
   for (const [x, z, c] of ANNE_LEADS.ecg) {
     const pad = cylM(1.5, 1.5, 0.3, M(0xf8fafc), 16); pad.position.set(x, 7.45, z); g.add(pad);

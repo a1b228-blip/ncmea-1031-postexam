@@ -1,4 +1,4 @@
-/* 1031 考後報告 3D 簡報｜放射科夜藍主題（固定 1600×900 舞台，依螢幕等比縮放） */
+/* 1031 考後報告 3D 簡報｜放射科夜藍主題（固定 1600×900 舞台，依螢幕等比縮放；非 16:9 螢幕留黑邊，見 src/view.js） */
 :root {
   --bg: #081322; --ink: #ffffff; --muted: #d5deea; --dim: #9fb0c6;
   --hl: #fcd34d; --cyan: #38bdf8; --ct: #fb923c; --mri: #a78bfa; --wait: #4ade80; --red: #ef4444; --amber: #fbbf24;
@@ -6,16 +6,16 @@
   --font: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); overflow: hidden; cursor: default; user-select: none; }
-#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-#space { position: fixed !important; inset: 0; pointer-events: none; }
+html, body { height: 100%; background: #000; color: var(--ink); font-family: var(--font); overflow: hidden; cursor: default; user-select: none; }
+#stage { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); display: block; }
+#space { position: fixed !important; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; overflow: hidden; }
 .space-item { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-#shade { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .8s; background: linear-gradient(90deg, rgba(5,12,24,.92) 0%, rgba(5,12,24,.7) 32%, rgba(5,12,24,0) 58%); }
+#shade { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; opacity: 0; transition: opacity .8s; background: linear-gradient(90deg, rgba(5,12,24,.92) 0%, rgba(5,12,24,.7) 32%, rgba(5,12,24,0) 58%); }
 body[data-slide="cover"] #shade { opacity: 1; }
-#flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: #e0f2fe; z-index: 4; }
-.vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(3, 8, 16, 0.75) 100%); }
+#flash { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; opacity: 0; background: #e0f2fe; z-index: 4; }
+.vignette { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(3, 8, 16, 0.75) 100%); }
 
-#deck { position: fixed; left: 50%; top: 50%; width: 1600px; height: 900px; transform-origin: 50% 50%; pointer-events: none; }
+#deck { position: fixed; left: 50%; top: 50%; width: 1600px; height: 900px; transform-origin: 50% 50%; pointer-events: none; overflow: hidden; }   /* 超出 16:9 畫面框的不顯示（例如片尾名單捲動前、黑邊裡） */
 .slide { position: absolute; inset: 0; opacity: 0; visibility: hidden; }
 .slide.active { visibility: visible; }
 .f { will-change: transform, opacity; }
@@ -25,17 +25,17 @@ h2 { position: absolute; left: 90px; top: 92px; font-size: 54px; font-weight: 90
 h2 em { font-style: normal; color: var(--hl); }
 
 /* HUD */
-#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-#chip { position: absolute; left: 3.6vw; top: 3.2vh; padding: 7px 16px; border-radius: 999px; font-size: clamp(12px, 1vw, 18px); font-weight: 800; letter-spacing: .1em;
+#hud { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; z-index: 5; }
+#chip { position: absolute; left: 3.6%; top: 3.2%; padding: 7px 16px; border-radius: 999px; font-size: clamp(12px, 1vw, 18px); font-weight: 800; letter-spacing: .1em;
   color: #e0f2fe; background: rgba(14, 165, 233, .18); border: 1px solid rgba(56, 189, 248, .5); opacity: 0; transition: opacity .5s; }
 #chip.on { opacity: 1; }
-#pageno { position: absolute; right: 3.6vw; bottom: 3.4vh; font-size: clamp(11px, .85vw, 15px); color: var(--dim); letter-spacing: .12em; }
-#mute { pointer-events: auto; position: absolute; right: 3.4vw; top: 3vh; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+#pageno { position: absolute; right: 3.6%; bottom: 3.4%; font-size: clamp(11px, .85vw, 15px); color: var(--dim); letter-spacing: .12em; }
+#mute { pointer-events: auto; position: absolute; right: 3.4%; top: 3%; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
   background: rgba(8, 18, 34, .6); color: var(--muted); cursor: pointer; display: grid; place-items: center; opacity: .55; transition: opacity .3s; }
 #mute:hover { opacity: 1; }
 #mute svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #mute .x { display: none; } #mute.off .x { display: inline; } #mute.off .w1, #mute.off .w2 { display: none; }
-#progress { position: fixed; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(56, 189, 248, .12); z-index: 5; }
+#progress { position: fixed; left: var(--vx, 0); width: var(--vw, 100%); top: calc(var(--vy, 0px) + var(--vh, 100vh) - 3px); height: 3px; background: rgba(56, 189, 248, .12); z-index: 5; }
 #progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--mri)); box-shadow: 0 0 12px var(--cyan); transition: width .6s; }
 
 /* 卡片 */
@@ -181,7 +181,7 @@ h2.small { font-size: 38px; top: 84px; }
 .qa p { margin-top: 6px; font-size: 19px; color: var(--dim); opacity: .35; transition: opacity .4s, color .4s; }
 .qa p b { font-size: 17px !important; margin-right: 8px; padding: 1px 8px; border-radius: 6px; background: rgba(56,189,248,.2); color: #7dd3fc !important; }
 .qa p.on { opacity: 1; color: #f1f5f9; }
-.db-timer { position: absolute; right: 60px; top: 120px; padding: 12px 26px 14px; border-radius: 18px; background: rgba(2,6,23,.88); border: 1px solid rgba(74,222,128,.45); text-align: center; opacity: 0; transition: opacity .5s; }
+.db-timer { position: absolute; right: 60px; bottom: 70px;   /* 放右下角：右上角會擋到後排考生的名字 */ padding: 12px 26px 14px; border-radius: 18px; background: rgba(2,6,23,.88); border: 1px solid rgba(74,222,128,.45); text-align: center; opacity: 0; transition: opacity .5s; }
 .slide[data-id="debrief"][data-step="0"] .db-timer, .slide[data-id="debrief"][data-step="1"] .db-timer, .slide[data-id="debrief"][data-step="2"] .db-timer { opacity: 1; }
 .db-timer b { display: block; font: 800 84px/1 "SF Mono", Menlo, monospace; color: #4ade80; letter-spacing: .04em; } .db-timer b.low { color: #f87171; }
 .db-timer span { display: block; margin-top: 6px; font-size: 20px; font-weight: 800; color: #e2e8f0; }
@@ -229,15 +229,71 @@ h2.small { font-size: 38px; top: 84px; }
 
 /* 17 電影片尾：上下黑邊、3D 變暗、名單由下往上捲、最後停在結語＋煙火 */
 .credits .cr-dim { position: absolute; left: -2000px; right: -2000px; top: -2000px; bottom: -2000px; background: #02060d; opacity: 0; }
-.credits .cr-bar { position: absolute; left: -2000px; right: -2000px; height: 2000px; background: #000; }
+.credits .cr-bar { position: absolute; left: -2000px; right: -2000px; height: 2000px; background: #000; z-index: 2; }   /* 電影黑邊蓋在名單上面：名單捲進黑邊後就看不到 */
 .credits .cr-bar.top { bottom: 100%; } .credits .cr-bar.bot { top: 100%; }
-.credits .cr-roll { position: absolute; left: 0; right: 0; top: 0; text-align: center; will-change: transform; }
+.credits .cr-roll { position: absolute; left: 0; right: 0; top: 0; text-align: center; will-change: transform; z-index: 1; }
 .cr-head { font-size: 64px; font-weight: 900; letter-spacing: .3em; color: var(--hl); text-shadow: 0 0 30px rgba(252,211,77,.35); }
 .cr-sub { margin-top: 18px; font-size: 26px; font-weight: 600; letter-spacing: .14em; color: var(--muted); }
 .cr-group { margin-top: 110px; }
 .cr-role { font-size: 24px; font-weight: 800; letter-spacing: .32em; color: #fcd34d; opacity: .9; margin-bottom: 18px; }
 .cr-name { font-size: 54px; font-weight: 800; letter-spacing: .22em; line-height: 1.5; color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,.8); }
-.credits .cr-end { position: absolute; left: 0; right: 0; top: 300px; text-align: center; opacity: 0; }
+.credits .cr-end { position: absolute; left: 0; right: 0; top: 300px; text-align: center; opacity: 0; z-index: 3; }
 .cr-end h1 { margin-top: 22px; font-size: 104px; line-height: 1.15; font-weight: 900; letter-spacing: .06em; text-shadow: 0 8px 40px rgba(0,0,0,.7); }
 .cr-end h1 span { display: block; } .cr-end h1 .hl { color: var(--hl); }
-.credits .cr-fw { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.credits .cr-fw { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+
+/* 開場載入畫面（全部素材載完才顯示「按 → 開始」） */
+#loader { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at 30% 35%, #12305a 0%, #081322 60%, #050c18 100%); transition: opacity 1s ease; }
+#loader.hide { opacity: 0; pointer-events: none; }
+.ld-box { width: min(78vw, 900px); }
+.ld-box h1 { margin: 2.2vh 0 5vh; font-size: clamp(44px, 6.4vw, 110px); line-height: 1.1; font-weight: 900; letter-spacing: .02em; }
+.ld-box h1 span { display: block; } .ld-box h1 .hl { color: var(--hl); }
+.ld-box .kicker { font-size: clamp(13px, 1.4vw, 24px); }
+.ld-bar { height: 10px; border-radius: 99px; background: rgba(56, 189, 248, .14); overflow: hidden; }
+.ld-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--mri)); box-shadow: 0 0 16px var(--cyan); transition: width .3s; }
+.ld-row { display: flex; justify-content: space-between; margin-top: 14px; font-size: clamp(14px, 1.3vw, 22px); color: var(--muted); letter-spacing: .1em; }
+.ld-pct { color: #fff; font-variant-numeric: tabular-nums; }
+.ld-warn { min-height: 1.6em; margin-top: 10px; font-size: clamp(13px, 1.1vw, 18px); color: #fca5a5; }
+.ld-go { margin-top: 4vh; text-align: center; font-size: clamp(16px, 1.5vw, 26px); letter-spacing: .2em; color: #fff; opacity: 0; transition: opacity .6s; }
+#loader.ready .ld-go { opacity: 1; animation: ldPulse 2s ease-in-out infinite .6s; }
+#loader.ready .ld-bar i { background: linear-gradient(90deg, var(--wait), var(--cyan)); }
+@keyframes ldPulse { 50% { opacity: .45; } }
+
+/* 小提示（效能模式切換等），畫面下方中央，幾秒後消失 */
+#toast { position: fixed; left: 50%; top: calc(var(--vy, 0px) + var(--vh, 100vh) * .86); transform: translateX(-50%); z-index: 15; pointer-events: none;
+  padding: 10px 22px; border-radius: 999px; background: rgba(8, 18, 34, .88); border: 1px solid var(--border); color: #fff;
+  font-size: clamp(13px, 1.1vw, 19px); font-weight: 700; letter-spacing: .06em; opacity: 0; transition: opacity .4s; }
+#toast.on { opacity: 1; }
+
+/* 8 分組後：第 4 步只看 MRI 等候區（單一畫面）→ 第 5 步兒子走去 CT，切成左 CT、右 MRI */
+.slide[data-id="exam"] .cam-tag { top: 178px; opacity: 0; transition: opacity .6s; }
+.slide[data-id="exam"] .dual-line { opacity: 0; transition: opacity .6s .4s; }
+.slide[data-id="exam"][data-step="3"] .cam-tag.r { opacity: 1; left: auto; right: 60px; }
+.slide[data-id="exam"][data-step="4"] .cam-tag, .slide[data-id="exam"][data-step="4"] .dual-line { opacity: 1; }
+.slide[data-id="exam"][data-step="4"] .side.left { top: auto; bottom: 44px; left: 40px; width: 720px; gap: 10px; }
+.slide[data-id="exam"][data-step="4"] .side.left .split { padding: 12px; }
+.slide[data-id="exam"][data-step="4"] .side.left .pair { padding: 10px 16px; }
+.slide[data-id="exam"][data-step="4"] .side.left .row { padding: 14px 20px; }
+.slide[data-id="exam"][data-step="4"] .side.left .ic { width: 52px; height: 52px; }
+
+/* 14 兒子台詞字幕：電影字幕式，放在下方清單上面；跟語音同時出現（transition-delay＝deck.js 的 SON_LINE） */
+.son-line { position: absolute; left: 40px; bottom: 236px; max-width: 600px; padding: 12px 20px; border-radius: 14px; background: rgba(8,18,34,.9); border: 1px solid rgba(251,146,60,.75);
+  font-size: 26px; font-weight: 800; line-height: 1.45; color: #fff; opacity: 0; transform: translateY(8px); transition: opacity .4s, transform .4s; }
+.son-line i { font-style: normal; display: inline-block; margin-right: 10px; padding: 2px 10px; border-radius: 8px; background: var(--ct); color: #1f1300; font-size: 19px; vertical-align: 3px; }
+.son-line.s2 { bottom: 290px; max-width: 880px; }
+.slide[data-id="family"][data-step="0"] .son-line.s0 { opacity: 1; transform: none; transition-delay: 1.8s; }
+.slide[data-id="family"][data-step="1"] .son-line.s1 { opacity: 1; transform: none; transition-delay: .3s; }
+.slide[data-id="family"][data-step="2"] .son-line.s2 { opacity: 1; transform: none; transition-delay: 1s; }
+
+/* 考點總整理：左邊兩張清單（CT／MRI），目前那一條展開說明，右邊 3D 考場對應房間亮起 */
+.pt-panel { position: absolute; left: 70px; top: 176px; width: 760px; display: flex; flex-direction: column; gap: 14px; }
+.pt-list { list-style: none; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 4px; counter-reset: n; }
+.pt-list .pt-head { font-size: 23px; font-weight: 900; padding: 2px 4px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.pt-list.ct .pt-head { color: var(--ct); } .pt-list.mri .pt-head { color: var(--mri); }
+.pt-list li[data-s] { counter-increment: n; display: flex; align-items: flex-start; gap: 12px; padding: 7px 10px; border-radius: 12px; opacity: .5; transition: opacity .4s, background .4s; }
+.pt-list li[data-s]::before { content: counter(n); flex: none; width: 32px; height: 32px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; font-weight: 900; background: rgba(148,163,184,.2); color: var(--dim); }
+.pt-list li b { display: block; font-size: 24px; } .pt-list li span { display: none; margin-top: 4px; font-size: 19px; line-height: 1.5; color: var(--muted); }
+.pt-list li.now { opacity: 1; background: rgba(252,211,77,.1); } .pt-list li.now b { color: var(--hl); } .pt-list li.now span { display: block; }
+.pt-list li.now::before { background: var(--hl); color: #1f1300; }
+.pt-list li.done { opacity: .85; } .pt-list li.done::before { content: "✓"; background: #16a34a; color: #fff; }
+.cr-src { margin-top: 90px; } .cr-src > div:not(.cr-role) { font-size: 22px; font-weight: 600; letter-spacing: .08em; line-height: 1.7; color: #cbd5e1; }   /* 素材來源：小字 */

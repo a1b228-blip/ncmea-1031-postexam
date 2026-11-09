@@ -1,6 +1,7 @@
 // 3D 世界：林口長庚整層樓（入闈、報到、觀摩）＋考場實際配置（A＝CT、B＝MRI，MRI 設備放等候區）
 // 座標：x、z ＝ 林口長庚平面圖像素（960×620，約 1 單位＝7 公分），y ＝ 高度。
 // 考場內儀器用「考場配置圖」座標（與考後報告 report.html 相同）建模，再用 mapPt 換到林口座標。
+import { view } from "./view.js";
 import * as THREE from "three";
 import gsap from "gsap";
 import { createBriefing } from "./briefing.js";
@@ -19,7 +20,7 @@ export function createWorld(canvas) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BG);
   scene.fog = new THREE.Fog(BG, 1100, 2600);
-  const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 1, 6000);
+  const camera = new THREE.PerspectiveCamera(32, view.w / view.h, 1, 6000);
   camera.layers.enable(1);                                             // 第 1 層＝文字標籤（大螢幕畫面不顯示）
 
   // ---------- 燈光 ----------
@@ -491,6 +492,28 @@ export function createWorld(canvas) {
       const bk = new THREE.Mesh(new THREE.BoxGeometry(6, 8, 1), seatM); bk.position.set(x, 10, z + back); bk.castShadow = true; debrief.add(bk);
       for (const dx of [-2.5, 2.5]) for (const dz of [-2.5, 2.5]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.6, 5.5, 0.6), steel); l.position.set(x + dx, 2.75, z + dz); debrief.add(l); }
     }
+    // 教室擺設：北牆白板（不寫字）＋掛鐘、考官面前評分夾板、每個座位一瓶水、角落盆栽
+    const add = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = true; o.receiveShadow = true; debrief.add(o); return o; };
+    const white = mat(0xf8fafc, { roughness: 0.3 }), alu = mat(0xcbd5e1, { metalness: 0.6, roughness: 0.35 });
+    add(new THREE.BoxGeometry(50, 19, 0.6), alu, DB_CX, 21, 411);                       // 白板外框
+    add(new THREE.BoxGeometry(48, 17, 0.3), white, DB_CX, 21, 411.4);                   // 白板板面
+    add(new THREE.BoxGeometry(30, 0.6, 1.6), alu, DB_CX, 11.4, 412);                    // 白板筆槽
+    [[0x1d4ed8, -4], [0xdc2626, -1], [0x111827, 2]].forEach(([c, dx]) => add(new THREE.CylinderGeometry(0.25, 0.25, 2.4, 8), mat(c), DB_CX + dx, 11.95, 412).rotation.z = Math.PI / 2);
+    const clock = add(new THREE.CylinderGeometry(3, 3, 0.5, 32), white, 425, 25, 411.3); clock.rotation.x = Math.PI / 2;
+    const rim = add(new THREE.TorusGeometry(3, 0.3, 8, 32), mat(0x334155), 425, 25, 411.5);
+    const hand = (len, ang) => { const h = add(new THREE.BoxGeometry(0.25, len, 0.1), mat(0x111827), 425, 25, 411.6); h.geometry.translate(0, len / 2, 0); h.rotation.z = ang; };
+    hand(2.4, -0.9); hand(1.6, 2.2);
+    const board = mat(0x8b5e34, { roughness: 0.6 }), paper = mat(0xffffff, { roughness: 0.8 });
+    for (const x of DB_X) {
+      add(new THREE.BoxGeometry(4, 0.25, 5.2), board, x, 10.05, DB_ZT - 2.6);            // 考官評分夾板
+      add(new THREE.BoxGeometry(3.6, 0.1, 4.6), paper, x, 10.22, DB_ZT - 2.5);
+      for (const dz of [-3.6, 3.6]) {                                                   // 每個座位一瓶水
+        add(new THREE.CylinderGeometry(0.55, 0.55, 3, 12), mat(0x7dd3fc, { transparent: true, opacity: 0.55, roughness: 0.1 }), x + 2.6, 11.4, DB_ZT + dz);
+        add(new THREE.CylinderGeometry(0.4, 0.4, 0.5, 12), mat(0x2563eb), x + 2.6, 13.1, DB_ZT + dz);
+      }
+    }
+    add(new THREE.CylinderGeometry(2.6, 2, 5, 16), mat(0xb45309, { roughness: 0.8 }), 437, 2.5, 418);   // 角落盆栽
+    for (const [dx, dy, dz, r] of [[0, 9, 0, 4], [-2, 12, 1, 3], [2, 11.5, -1, 3.2], [0, 14.5, 0, 2.4]]) add(new THREE.SphereGeometry(r, 12, 10), mat(0x15803d, { roughness: 0.9 }), 437 + dx, dy, 418 + dz);
   }
   // 桌上的倒數碼錶（兩面都有數字，考官、考生都看得到）
   const timerCv = document.createElement("canvas"); timerCv.width = 320; timerCv.height = 140;
@@ -573,16 +596,16 @@ export function createWorld(canvas) {
     if (nurse) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.7, 1.6, 16), mat(0xffffff)); cap.position.y = 21.4; g.add(cap); }
     g.castShadow = true; return g;
   }
-  // 放射師 1＋護理師 → CT 室；放射師 2、3 → MRI 等候區（安妮旁邊說明）
+  // 放射師 1＋護理師 → CT 室（走到第 9 頁病人辨識的位置等兒子）；放射師 2、3 → MRI 等候區（安妮旁邊說明）
   // look：走到定點後面向哪裡
   const DOOR_CREW = [
-    { c: 0x1d4ed8, at: [275, 243.5], path: [[284, 245], [298, 247], [312, 244], [322, 238]], look: [340, 238] },
-    { c: 0xec4899, nurse: true, at: [275, 252], path: [[284, 250], [298, 249], [312, 251], [322, 254]], look: [340, 254] },
+    { c: 0x1d4ed8, at: [275, 243.5], path: [[284, 245], [298, 247], [312, 244], [322, 238], [352, 248], [386, 255]], look: [398, 249] },
+    { c: 0xec4899, nurse: true, at: [275, 252], path: [[284, 250], [298, 249], [312, 251], [322, 254], [348, 251], [375, 247]], look: [398, 249] },
     { c: 0x1d4ed8, at: [267, 240], path: [[284, 244], [298, 247], [306, 260], [307, 288], [310, 312], [313, 320]], look: [313, 340] },
     { c: 0x1d4ed8, at: [267, 255.5], path: [[284, 251], [298, 250], [304, 262], [304, 290], [316, 306], [325, 320]], look: [325, 340] },
   ];
   // 標準病人：先在 MRI 等候區（安妮另一側）聽說明，聽完才走到隔壁 CT 室做電腦斷層
-  const SP = { at: [319, 342], look: [319, 320], path: [[306, 344], [303, 318], [305, 290], [306, 262], [330, 247], [370, 238], [392, 232]], endLook: [420, 232] };
+  const SP = { at: [319, 342], look: [319, 320], path: [[306, 344], [303, 318], [305, 290], [306, 262], [330, 247], [370, 240], [398, 249]], endLook: [386, 254] };   // 走到第 9 頁病人辨識的位置
   const doorScene = new THREE.Group(); doorScene.visible = false; scene.add(doorScene);
   // crew[0] 鼎晨（CT 放射師）、crew[1] 曉鏵（CT 護理師）、crew[2] 云玎（MRI 放射師，撥 999）、crew[3] 瑞益（MRI 放射師，壓胸）
   const CREW_IDS = ["dingchen", "xiaohua", "yunding", "ruiyi"];
@@ -686,6 +709,17 @@ export function createWorld(canvas) {
     gsap.to(a.p, { x: pose.pos[0], y: pose.pos[1], z: pose.pos[2], duration: 1.6, ease: "power2.inOut", overwrite: true });
     gsap.to(a.l, { x: pose.look[0], y: pose.look[1], z: pose.look[2], duration: 1.6, ease: "power2.inOut", overwrite: true });
   }
+  // 第 8 頁分組後：用第 9 頁同一組監視器鏡頭（"mri"＝分組說明時只看 MRI 等候區；"dual"＝兒子走去 CT，左右兩個畫面）
+  // 單一 MRI 畫面時左邊有文字卡 → 看的點往左偏，讓等候區落在畫面右邊
+  const DOOR_MRI_SOLO = { pos: [346, 70, 378], look: [304, 2, 330] };
+  let doorView = null;
+  function setDoorView(mode, animate) {
+    const prev = doorView; doorView = mode || null;
+    if (!doorView || dualOn) return;
+    aimDual("ct", DUAL_POSE.ct, false);
+    const pose = doorView === "dual" ? DUAL_POSE.mri[0] : DOOR_MRI_SOLO;
+    aimDual("mri", pose, animate && prev != null);
+  }
   const split = { v: 0.5 };
   // 左右畫面的比例（0＝只顯示右邊 MRI 鏡頭）；dur＞0 時平滑滑動
   function setDualSplit(r, dur = 0) {
@@ -694,7 +728,7 @@ export function createWorld(canvas) {
     if (dur > 0) gsap.to(split, { v: r, duration: dur, ease: "power2.inOut" }); else split.v = r;
   }
   function renderDual() {
-    const w = innerWidth, h = innerHeight, half = Math.floor(w * split.v);
+    const w = view.w, h = view.h, half = Math.floor(w * split.v);
     renderer.setScissorTest(true);
     for (const [id, x, vw] of [["ct", 0, half], ["mri", half, w - half]]) {
       if (vw <= 0) continue;                             // split 0：只畫右邊鏡頭（整個畫面）
@@ -781,8 +815,8 @@ export function createWorld(canvas) {
   swell.position.set(0.6, 9.5, 3.9); swell.visible = false; sp.add(swell);
   gsap.to(swell.scale, { x: 1.3, y: 1.3, z: 1.3, duration: 0.7, repeat: -1, yoyo: true, ease: "sine.inOut" });
   // CT 病人躺上 CT 床（頭朝機架、面朝上）；留置針在靠北側的手臂
-  const SP_LIE = { pos: [392, 12, 237.6], rot: [Math.PI, 0, -Math.PI / 2] };
-  const IV_AT = new THREE.Vector3(401.5, 12.6, 234.1);
+  const SP_LIE = { pos: [398, 10.65, 237.6], rot: [Math.PI, 0, -Math.PI / 2] };   // 背部貼齊床面（床面 y＝9），腳跟在床尾內
+  const IV_AT = new THREE.Vector3(407.5, 11.25, 234.1);
   // 對比劑管路：從打藥機延長管末端接到病人手上的留置針（逐段畫出）
   let ctLine = null, lineDX = 0;
   function lineGeo(dx) {
@@ -809,7 +843,7 @@ export function createWorld(canvas) {
   const board = new THREE.Mesh(new THREE.BoxGeometry(44, 1.2, 26), mat(0xd97706, { roughness: 0.5 })); board.position.set(-10, -0.8, 0); board.visible = false; annie.add(board);
   const bvm = new THREE.Group();
   { const mask = new THREE.Mesh(new THREE.ConeGeometry(4.2, 4, 18), mat(0xe0f2fe, { transparent: true, opacity: 0.85 })); mask.rotation.z = Math.PI / 2; bvm.add(mask);
-    const bag = new THREE.Mesh(new THREE.SphereGeometry(4.2, 16, 12), mat(0x2563eb, { roughness: 0.6 })); bag.scale.set(2.1, 1, 1); bag.position.set(-10, 2, 0); bvm.add(bag); }
+    const bag = new THREE.Mesh(new THREE.SphereGeometry(4.2, 16, 12), mat(0x2563eb, { roughness: 0.6 })); bag.scale.set(2.1, 1, 1); bag.position.set(-10, 2, 0); bvm.add(bag); bvm.userData.bag = bag; }
   bvm.position.set(-38, 9, 0); bvm.visible = false; annie.add(bvm);
   const pads = new THREE.Group();
   for (const [x, z] of [[-17, -6], [-4, 7]]) { const pd = new THREE.Mesh(new THREE.BoxGeometry(8, 0.8, 6), mat(0xf8fafc)); pd.position.set(x, 4.6, z); pads.add(pd); }
@@ -830,10 +864,10 @@ export function createWorld(canvas) {
   function vitals(mode, hr, animateTo) { hrTw?.kill(); hrTw = null; annieVitals.mode = mode; annieVitals.hr = hr; if (animateTo != null) hrTw = gsap.to(annieVitals, { hr: animateTo, duration: 12, ease: "none" }); }
   // 各人在每一步的定點（x, z, 面向的點）
   const CT_SP = [398, 249, [386, 254]], CT_RAD = [386, 255, [398, 249]], CT_NURSE = [375, 247, [398, 249]];
-  const CT_RAD_LIE = [402, 251, [402, 238]], CT_NURSE_IV = [401, 227.5, [401, 238]];
+  const CT_RAD_LIE = [408, 251, [408, 238]], CT_NURSE_IV = [407, 227.5, [407, 238]];
   const M_A = [313, 320, [313, 340]], M_A_CON = [357, 335, [380, 335]], M_B = [325, 320, [325, 340]], M_B_SWEPT = [331, 322, [331, 340]], M_B_MANUAL = [316, 323, [316, 340]];
   // 第 10 頁定點：CT 放射師、護理師回控制台；MRI 推床停在 MRI 檢查床南側，安妮過床到 MRI 床（頭朝磁體）
-  const CT_RAD_CON = [347, 226, [360, 226]], CT_NURSE_CON = [347, 237, [360, 237]], SP_IN_DX = 12;
+  const CT_RAD_CON = [347, 226, [360, 226]], CT_NURSE_CON = [347, 237, [360, 237]], SP_IN_DX = 8;
   const STR_HOME = [319, 330], STR_PARK = [395, 349], STR_PATH = [[319, 330], [319, 356], [392, 356], [395, 349]];
   const ANNIE_TABLE = [403, 9, 335], ANNIE_BORE = 412;     // 整個躺在 MRI 床上、頭朝磁體；送進去時頭部先進磁體
   const M_A_CON2 = [357, 330, [380, 330]], M_B_CON2 = [357, 342, [380, 342]];
@@ -1290,13 +1324,25 @@ export function createWorld(canvas) {
   }
 
   // ---------- 繪製 ----------
-  function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+  // 效能模式（舊電腦）：關掉陰影、解析度降為 1 倍
+  let lite = false;
+  function setLite(on) {
+    lite = !!on;
+    sun.castShadow = !lite;
+    renderer.setPixelRatio(lite ? 1 : Math.min(devicePixelRatio, 2));
+    resize();
+  }
+  function resize() { renderer.setSize(view.w, view.h, false); camera.aspect = view.w / view.h; camera.updateProjectionMatrix(); }
   resize(); addEventListener("resize", resize);
   let t0 = performance.now();
   function frame(now) {
     const dt = Math.min(0.1, (now - t0) / 1000);
     chev.offset.x -= dt * 0.9; t0 = now;
     updatePeople(dt, now / 1000);
+    if (bvm.visible) {                                   // BVM：每 6 秒擠球 2 下（配合 30：2），擠的時候球變扁
+      const c = (now / 1000) % 6, k = (u) => (u > 0 && u < 0.7 ? Math.sin((u / 0.7) * Math.PI) : 0), q = Math.max(k(c), k(c - 1.1));
+      bvm.userData.bag.scale.set(2.1 + q * 0.15, 1 - q * 0.38, 1 - q * 0.25);
+    }
     updateWand();
     animateDevices(now);
     brief.update();
@@ -1324,5 +1370,5 @@ export function createWorld(canvas) {
   }
   const EXAM_BOUNDS = [294, 207, 438, 368];
 
-  return { setDebrief, setDebriefTimer, THREE, renderer, scene, camera, setScreen, fadeToLive, setDoorScene, setDual, renderDual, isDual: () => dualOn, aimDual, dualCam, setDualSplit, BRIEF_COUNT: brief.count, setLayer, highlight, showRoute, placeFig, frame, setLive, setAudience, setExamWalls, obstacles, EXAM_BOUNDS, LIVE_POSE, FP_START, ROOMS, mapPt };
+  return { setLite, isLite: () => lite, setDebrief, setDebriefTimer, THREE, renderer, scene, camera, setScreen, fadeToLive, setDoorScene, setDoorView, setDual, renderDual, isDual: () => dualOn || !!doorView, aimDual, dualCam, setDualSplit, BRIEF_COUNT: brief.count, setLayer, highlight, showRoute, placeFig, frame, setLive, setAudience, setExamWalls, obstacles, EXAM_BOUNDS, LIVE_POSE, FP_START, ROOMS, mapPt };
 }

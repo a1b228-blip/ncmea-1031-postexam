@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import gsap from "gsap";
 import { bgm } from "./audio.js";
+import { bindSrc } from "./preload.js";
 
 const W = 1920, H = 1080, N = 14;
 const SRC = Array.from({ length: N }, (_, i) => `assets/brief/s${String(i + 1).padStart(2, "0")}.jpg`);
@@ -14,7 +15,7 @@ export function createBriefing() {
   const g = cv.getContext("2d");
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const imgs = SRC.map((src) => { const im = new Image(); im.src = src; return im; });
-  const video = Object.assign(document.createElement("video"), { src: VIDEO.src, playsInline: true, preload: "auto" });
+  const video = bindSrc(Object.assign(document.createElement("video"), { playsInline: true, preload: "auto" }), VIDEO.src);
   // 影片有聲音時，背景音樂自動壓低；停下或播完再恢復
   video.addEventListener("play", () => bgm.duck(!video.muted));
   for (const ev of ["pause", "ended"]) video.addEventListener(ev, () => bgm.duck(false));

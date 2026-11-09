@@ -1,6 +1,7 @@
 // 1031 考後報告 3D 簡報：換頁引擎（參考藥劑科 RPA 第三版「走廊模式」）
 // 整份簡報是同一個 3D 世界（林口長庚整層樓＋考場），每一頁、每一步鏡頭停在不同位置，換頁時連續飛行。
 // 操作：→／空白鍵／點擊 下一步，← 上一步，M 靜音，F 全螢幕，Home 回封面。
+import { view } from "./view.js";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
@@ -9,6 +10,7 @@ import { sfx, bgm } from "./audio.js";
 import { createExplore } from "./explore.js";
 import { drawCT, drawMRI } from "./scanImages.js";
 import { annieMonitorCanvas, annieVitals } from "./devices.js";
+import { preloadAll } from "./preload.js";
 
 gsap.registerPlugin(SplitText);
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -46,6 +48,7 @@ const POSE = {
   debrief: { pos: [300, 120, 540], look: [330, 4, 446] },        // Debrief 教室：從東南上方看長桌與走廊入口（左邊留給文字）
   debriefClose: { pos: [318, 58, 500], look: [345, 8, 442] },   // 拉近：看得到兩側的人與桌上的碼錶
   obsRest: { pos: [160, 50, 448], look: [76, 6, 372] },         // 回觀摩教室休息：看得到我們隊伍與秀蒂
+  points: { pos: [262, 330, 520], look: [318, 0, 292] },        // 考點總整理：俯瞰整個考場（左邊留給文字卡）
 };
 
 // ---------- 各頁設定（每一步的 3D 狀態，後一步沿用前一步） ----------
@@ -100,13 +103,13 @@ const SLIDES = {
       { cam: "toDoor", hl: [], routes: ["toExamDoor"], layers: { examBig: 0 }, figs: { team: { route: "toExamDoor", t: 1, dur: 4.6, delay: 0.6 } } },
       { cam: "doorFP", routes: [], door: "door", walls: true, layers: { building: 0 }, figs: { team: { hide: true } } },
       {},
-      { cam: "examSplit", door: "split", walls: false, hl: ["ct", "wait"] },
-      { door: "spToCT" },
+      { cam: "examSplit", door: "split", walls: false, hl: ["ct", "wait"], doorView: "mri", split: 0 },   // 分組說明：重點在 MRI → 只看 MRI 等候區
+      { door: "spToCT", doorView: "dual", split: 0.5 },                                                  // 兒子走去 CT → 切成左 CT、右 MRI 兩個畫面
     ],
   },
   // 第 9 頁：兩間考場同時進行（左右雙畫面）
   dual: {
-    steps: [...[0, 1, 2, 3].map((d) => (d ? { dual: d } : { dual: 0, door: null, hl: [], routes: [] })), { dual: 40 }],   // 40＝瑞益移除痠痛貼布、暖暖包（考題陷阱）
+    steps: [...[0, 1, 2, 3].map((d) => (d ? { dual: d } : { dual: 0, door: null, doorView: null, hl: [], routes: [] })), { dual: 40 }],   // 40＝瑞益移除痠痛貼布、暖暖包（考題陷阱）
   },
   // 第 10 頁：執行檢查與影像判讀（延續雙畫面）
   scan: {
@@ -137,6 +140,13 @@ const SLIDES = {
   trm: { split: 0, steps: [27, 28, 29, 30, 31].map((d, i) => ({ dual: d, ...(i ? {} : { audience: false }) })) },
   // 第 16 頁：ISBAR 五個交班時機（重播當時那一幕；dual 32–37 由 world.js 的 ISBAR_VIEW 對應）
   isbar: { split: 0, steps: [32, 33, 34, 35, 36, 37].map((d) => ({ dual: d })) },
+  // 考點總整理：鏡頭俯瞰考場（考場在畫面右邊），每按一下亮一條考點，對應的房間跟著亮（MRI 第 3～5 條發生在等候區）
+  points: {
+    steps: [
+      { dual: null, door: null, cam: "points", hl: [], routes: [], audience: false },
+      { hl: ["ct"] }, { hl: ["ct"] }, { hl: ["mri"] }, { hl: ["mri"] }, { hl: ["wait"] }, { hl: ["wait"] }, { hl: ["wait"] },
+    ],
+  },
   // 第 17 頁：電影片尾（進頁自動播：謝幕鞠躬 → 名單捲動 → 結語＋煙火；→ 直接跳到最後一張）
   credits: { split: 0, steps: [{ dual: 38 }, { dual: 39 }] },
 
@@ -147,7 +157,7 @@ const T = THREE, UP = new T.Vector3(0, 1, 0);
 const cssScene = new T.Scene(), css3d = new CSS3DRenderer();
 css3d.domElement.id = "space";
 document.body.insertBefore(css3d.domElement, deck);
-const fitSpace = () => css3d.setSize(innerWidth, innerHeight);
+const fitSpace = () => css3d.setSize(view.w, view.h);
 fitSpace(); addEventListener("resize", fitSpace);
 function lift(el, pose, { D, turn = 0, size = 1 }) {
   const sl = el.closest(".slide"), w = el.offsetWidth, h = el.offsetHeight;
@@ -221,6 +231,7 @@ function stateAt(si, step) {
       if (x.screen !== undefined) st.screen = x.screen;
       if (x.door !== undefined) st.door = x.door;
       if (x.dual !== undefined) st.dual = x.dual;
+      if (x.doorView !== undefined) st.doorView = x.doorView;
       if (x.debrief !== undefined) st.debrief = x.debrief;
       if (x.walls !== undefined) st.walls = x.walls;
       Object.assign(st.layers, x.layers || {});
@@ -252,6 +263,7 @@ function apply3D(si, step, animate, prevSi) {
   W.setDualSplit(stepSplit, animate && si === prevSi ? 1.0 : 0);
   const dualPrev = W.isDual();
   W.setDual(st.dual ?? null, animate && st.isNew);
+  W.setDoorView(st.dual == null ? st.doorView ?? null : null, animate && st.isNew);
   if (animate && dualPrev !== W.isDual()) gsap.fromTo("#flash", { opacity: 0.6 }, { opacity: 0, duration: 0.7, ease: "power2.out" });   // 切換雙畫面時閃一下
   W.setDebrief(st.debrief ?? null, animate && st.isNew);
   W.setAudience(!!st.audience);
@@ -342,7 +354,7 @@ function musicCue(id, step) {
     case "arrest": return ["05_worse"];                                      // ⑤ 病況惡化
     case "cpr": return ["06_emergency"];                                     // ⑥ 急救高峰
     case "family": return ["06_emergency", step >= 3 ? 0.5 : 1];             //    999 團隊到場後慢慢收掉
-    case "debrief": case "trm": case "isbar": return ["07_review"];         // ⑦-a Debrief、回顧
+    case "debrief": case "trm": case "isbar": case "points": return ["07_review"];         // ⑦-a Debrief、回顧
     case "credits": return ["08_credits", 1, true];                          // ⑦-b 片尾（每次進來從頭播）
     default: return ["02_flow"];                                             // ② 當天流程（第 2–7 頁）
   }
@@ -425,7 +437,8 @@ const HOOKS = {
   arrest: listHook,
   cpr: listHook,
   family: listHook,
-  trm: (sl, step) => { sl.dataset.step = step; },          // 文字卡亮暗依步驟（見 deck.css）
+  trm: (sl, step) => { sl.dataset.step = step; },
+  points: (sl, step) => { $$(".pt-list li[data-s]", sl).forEach((li) => { const s = +li.dataset.s; li.className = s < step ? "done" : s === step ? "now" : ""; }); },          // 文字卡亮暗依步驟（見 deck.css）
   isbar: (sl, step) => { sl.dataset.step = step; $$(".isbar-list li", sl).forEach((li) => { const s = +li.dataset.s; li.className = s < step ? "done" : s === step ? "now" : ""; }); },
   scan: scanHook,
   handle: scanHook,
@@ -433,6 +446,7 @@ const HOOKS = {
   exam: (sl, step, animate) => {
     if (step === 1) { if (animate) stemCountdown(true); } else if (step === 0) stemCountdown(false);
     $(".side", sl).classList.toggle("done", step >= 3);          // 分組之後收起題幹與考官卡，留位置給分組與標準病人
+    sl.dataset.step = step;                                       // 第 4 步只看 MRI、第 5 步左右兩個畫面（鏡頭標籤見 deck.css）
   },
   brief: (sl, step, animate) => gsap.to($("h2", sl), { opacity: step >= 1 && step < W.BRIEF_COUNT ? 0 : 1, duration: animate ? 0.5 : 0 }),  // 推近看投影片時收起標題
   team: (sl, step, animate) => phonesStep(sl, step >= 3, animate && step === 3),
@@ -467,6 +481,10 @@ function render(prevSi, animate) {
   sfx.pulse((ids[si] === "cpr" && step >= 2) || ids[si] === "family");        // 第 13、14 頁：壓胸節奏
   if (animate && ids[si] === "cpr" && step === 4) setTimeout(() => sfx.paging(), 300);   // 全院廣播：廣播鈴＋「地下室，MRI，999」語音
   else if (ids[si] !== "cpr" || step < 4) sfx.stopPaging();                                // 倒退或離開第 13 頁就停掉廣播
+  // 第 14 頁：兒子台詞語音（前 3 步各一句；delay＝配合 3D 動作的秒數，字幕見 index.html .son-line）
+  const SON_LINE = [1.8, 0.3, 1.0];
+  if (animate && ids[si] === "family" && step < 3) sfx.line(`assets/voice/son_${step + 1}.mp3`, SON_LINE[step]);
+  else if (!animate || ids[si] !== "family" || step >= 3) sfx.stopLine();
   if (ids[si] !== "exam" && stemTw) stemCountdown(false);      // 離開第 8 頁就停掉倒數
   if (ids[si] !== "credits") stopCredits();
   if (ids[si] !== "debrief") stopDebriefTimer();                    // 離開第 17 頁就停掉片尾捲動與煙火
@@ -496,7 +514,14 @@ function go(dir) {
     if (si !== prev) (slides[si]._space || []).forEach((w) => gsap.fromTo(w, { opacity: 0 }, { opacity: 1, duration: 0.8, delay: dur }));
   }
 }
+let loading = true;                                           // true＝載入中（不接受按鍵）；"ready"＝載完，等按 →
 addEventListener("keydown", (e) => {
+  if (loading) {
+    e.preventDefault();
+    if (e.key === "p" || e.key === "P") { setLite(!W.isLite(), true); return; }
+    if (loading === "ready" && ["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(e.key)) dismissLoader();
+    return;
+  }
   if (diving) { e.preventDefault(); return; }               // 飛入大螢幕途中不接受按鍵
   if (X.active) {                                   // 探索中：方向鍵／WASD 走路，Enter／PageDown 下一頁
     if (X.keydown(e)) { e.preventDefault(); return; }
@@ -508,8 +533,12 @@ addEventListener("keydown", (e) => {
   else if (e.key === "m" || e.key === "M") { $("#mute").classList.toggle("off", sfx.toggleMute()); }
   else if (e.key === "f" || e.key === "F") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
   else if (e.key === "Home") { si = 0; step = 0; render(null, false); }
+  else if (e.key === "p" || e.key === "P") setLite(!W.isLite(), true);
 });
-addEventListener("click", (e) => { if (!X.active && !e.target.closest("button,a")) go(1); });
+addEventListener("click", (e) => {
+  if (loading) { if (loading === "ready") dismissLoader(); return; }
+  if (!X.active && !e.target.closest("button,a")) go(1);
+});
 $("#mute").addEventListener("click", (e) => { e.stopPropagation(); sfx.unlock(); $("#mute").classList.toggle("off", sfx.toggleMute()); });
 
 // ---------- 第 5 頁：第一人稱探索 HUD（所在位置、每間 3 分鐘倒數、小地圖） ----------
@@ -541,12 +570,36 @@ function drawMinimap() {
   mctx.restore();
 }
 
+// ---------- 效能模式（P 切換；網址加 ?lite=1 也會開；會記住在這台電腦） ----------
+const toast = $("#toast"); let toastT = 0;
+function say(msg, sec = 3) { toast.textContent = msg; toast.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove("on"), sec * 1000); }
+function setLite(on, tell) {
+  W.setLite(on);
+  try { localStorage.setItem("deckLite", on ? "1" : "0"); } catch {}
+  if (tell) say(on ? "效能模式：開（關閉陰影、降低解析度）" : "效能模式：關（完整畫質）");
+}
+{
+  let saved = null; try { saved = localStorage.getItem("deckLite"); } catch {}
+  if (new URLSearchParams(location.search).has("lite") || saved === "1") setLite(true);
+}
+// 畫面不順偵測：開始後若連續 5 秒平均低於每秒 24 格，提示一次可以按 P
+const fps = { n: 0, t: 0, low: 0, told: false };
+function watchFps(dt) {
+  if (loading || fps.told || W.isLite()) return;
+  fps.n++; fps.t += dt;
+  if (fps.t < 1) return;
+  const v = fps.n / fps.t; fps.n = 0; fps.t = 0;
+  fps.low = v < 24 ? fps.low + 1 : 0;
+  if (fps.low >= 5) { fps.told = true; say("畫面不夠順？按 P 開效能模式", 6); }
+}
+
 // ---------- 開始 ----------
 lift($(".cover-title"), POSE.cover, { D: 520, turn: 0.18, size: 0.92 });
 const t0 = performance.now();
 gsap.ticker.add(() => {
   const now = performance.now(), t = (now - t0) / 1000, dt = (now - (window._lastT || now)) / 1000; window._lastT = now;
   W.frame(now);
+  watchFps(dt);
   const walking = X.update(dt);
   if (walking) {
     const r = X.state.room;
@@ -567,7 +620,35 @@ gsap.ticker.add(() => {
 render(null, false);
 gsap.set(slides[0], { opacity: 0 });
 flyTo("cover", false); cam.pos.copy(V(POSE.coverStart.pos)); cam.look.copy(V(POSE.coverStart.look));
-gsap.to(slides[0], { opacity: 1, duration: 1.2, delay: 0.3 });
-flight = gsap.to(cam.pos, { x: POSE.cover.pos[0], y: POSE.cover.pos[1], z: POSE.cover.pos[2], duration: 4.5, ease: "power2.out" });
-gsap.to(cam.look, { x: POSE.cover.look[0], y: POSE.cover.look[1], z: POSE.cover.look[2], duration: 4.5, ease: "power2.out" });
-window.__deck = { go, W, cam, X, bgm };
+// 封面開場：載入畫面淡出後，鏡頭飛到封面位置
+function intro() {
+  gsap.to(slides[0], { opacity: 1, duration: 1.2, delay: 0.3 });
+  flight = gsap.to(cam.pos, { x: POSE.cover.pos[0], y: POSE.cover.pos[1], z: POSE.cover.pos[2], duration: 4.5, ease: "power2.out" });
+  gsap.to(cam.look, { x: POSE.cover.look[0], y: POSE.cover.look[1], z: POSE.cover.look[2], duration: 4.5, ease: "power2.out" });
+}
+
+// ---------- 開場載入畫面：全部素材載完才能開始 ----------
+const ld = $("#loader");
+if (location.protocol === "file:") {
+  $(".ld-warn", ld).textContent = "請雙擊 Start-Windows.bat（Mac：Start-Mac.command）開啟；直接點 index.html 會載不到人物與音樂";
+}
+preloadAll(({ ratio, failed, phase }) => {
+  const pct = Math.floor(ratio * 100);
+  $(".ld-bar i", ld).style.width = `${pct}%`;
+  $(".ld-pct", ld).textContent = `${pct}%`;
+  $(".ld-msg", ld).textContent = phase === "prepare" ? "準備人物模型" : "載入中";
+  if (failed) $(".ld-warn", ld).textContent = `有 ${failed} 個素材載入失敗，仍可開始`;
+}).then(({ failed }) => {
+  ld.classList.add("ready"); loading = "ready";
+  $(".ld-msg", ld).textContent = failed ? "載入完成（部分素材失敗）" : "載入完成";
+  $(".ld-pct", ld).textContent = "100%"; $(".ld-bar i", ld).style.width = "100%";
+});
+function dismissLoader() {
+  loading = false;
+  ld.classList.add("hide");
+  sfx.unlock(); bgm.start();                                   // 這一下按鍵同時讓開場音樂響起
+  intro();
+}
+// 除錯用：直接跳到某頁某步（不播動畫）
+const jumpTo = (id, k = 0) => { const p = si; si = Math.max(0, ids.indexOf(id)); step = Math.min(k, nSteps(si) - 1); render(p, false); flyTo(stateAt(si, step).cam, false); };
+window.__deck = { go, W, cam, X, bgm, setLite, jumpTo };

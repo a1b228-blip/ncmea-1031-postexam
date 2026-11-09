@@ -104,7 +104,10 @@
 
   <!-- ==================== 8 考試開始：讀題幹、兩兩分組 ==================== -->
   <section class="slide" data-id="exam" data-chip="第二幕｜考試開始">
+    <div class="dual-line"></div>
     <h2>考試開始：<em>30 秒</em>讀題幹</h2>
+    <div class="cam-tag l"><i></i>CT 室（檢查室 A）</div>
+    <div class="cam-tag r"><i></i>MRI 等候區（檢查室 B）</div>
     <div class="side left">
       <div class="card stem f" data-s="1">
         <div class="stem-top"><b>題幹</b><span class="stem-timer" id="stemTimer">0:30</span></div>
@@ -257,6 +260,10 @@
       <li data-s="3"><b>院內 999 急救團隊到場</b></li>
       <li data-s="4"><b>護理師跟急救團隊交班</b></li>
     </ol>
+    <!-- 兒子台詞字幕（語音：assets/voice/son_1～3.mp3，Edge-TTS 生成） -->
+    <div class="son-line s0"><i>兒子</i>「我爸爸怎麼了？他剛剛不是還好好的嗎？」</div>
+    <div class="son-line s1"><i>兒子</i>「不行，我要去看我爸爸！」</div>
+    <div class="son-line s2"><i>兒子</i>「我爸爸為什麼會這樣？你們到底對他做了什麼？快救救他啊！」</div>
   </section>
 
   <!-- ==================== 15 考試結束：Debrief（考官 4 位、考生 4 位隔著長桌面對面） ==================== -->
@@ -320,6 +327,26 @@
     </div>
   </section>
 
+  <!-- ==================== 考點總整理（文字＝考後實況報告 1031競賽場地3D配置圖/report.html「考點」原文；按一下亮一條，對應房間亮起） ==================== -->
+  <section class="slide" data-id="points" data-chip="第三幕｜評核重點">
+    <h2>考點<em>總整理</em></h2>
+    <div class="pt-panel">
+      <ol class="card pt-list ct">
+        <li class="pt-head">CT 室｜兒子（打對比劑）</li>
+        <li data-s="1"><div><b>注射對比劑時 IV loss 的處置</b><span>打藥過程中病人的靜脈管路失效（漏針、外滲），我們要怎麼處置；有沒有告知臨床醫師並交班，後續有沒有衛教病人怎麼處置。</span></div></li>
+        <li data-s="2"><div><b>掃描中有沒有即時看影像</b><span>影像上沒有對比劑進去，考我們掃描時會不會看影像、發現藥沒有打進去。</span></div></li>
+      </ol>
+      <ol class="card pt-list mri">
+        <li class="pt-head">MRI 室｜父親（失智・Brain MRI 不打藥）</li>
+        <li data-s="3"><div><b>前置作業金屬探測與金屬異物移除</b><span>有沒有用金屬探測器掃描病人，並移除病人身上的金屬異物。</span></div></li>
+        <li data-s="4"><div><b>掃描中病人躁動</b><span>會不會即時停止掃描，並與臨床交班、討論還要不要繼續執行檢查。</span></div></li>
+        <li data-s="5"><div><b>檢查中病人意識改變 → 急救</b><span>如何做急救處置；撥 999 之後團隊如何分工合作；護理人員從 CT 室過來支援時有沒有交班。</span></div></li>
+        <li data-s="6"><div><b>急救中家屬吵鬧的安撫</b><span>兒子聽到父親在急救，從 CT 室跑過來吵鬧，我們要怎麼安撫。</span></div></li>
+        <li data-s="7"><div><b>醫師到場如何交班</b><span>急救團隊到場後，有沒有向團隊交班。</span></div></li>
+      </ol>
+    </div>
+  </section>
+
   <!-- ==================== 17 電影片尾：特別感謝（進頁自動播；→ 直接跳到最後一張） ==================== -->
   <section class="slide credits" data-id="credits">
     <div class="cr-dim"></div>
@@ -330,6 +357,12 @@
       <div class="cr-group"><div class="cr-role">標準病人扮演</div><div class="cr-name">邢乃驊</div><div class="cr-name">林家豪</div></div>
       <div class="cr-group"><div class="cr-role">演練考官</div><div class="cr-name">許書維</div><div class="cr-name">曾妍鳳</div></div>
       <div class="cr-group"><div class="cr-role">護理師</div><div class="cr-name">楊曉鏵</div></div>
+      <!-- 素材來源（醫師袍為 CC-BY，必須標註；見 assets/people/授權紀錄.md、assets/music/授權紀錄.md） -->
+      <div class="cr-group cr-src"><div class="cr-role">素材來源</div>
+        <div>3D 人物：MakeHuman Community（CC0）</div>
+        <div>醫師袍 3D 素材：Mindfront（CC-BY），MakeHuman Community</div>
+        <div>背景音樂：Pixabay</div>
+      </div>
     </div>
     <div class="cr-end">
       <div class="kicker">NCMEA 醫事放射組第二場｜2026.10.31 林口長庚</div>
@@ -346,6 +379,19 @@
   <button id="mute" title="音效（M）"><svg viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z"/><path class="w1" d="M16.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M19 6.5a7.5 7.5 0 0 1 0 11"/><path class="x" d="M16.5 9.5l5 5m0-5-5 5"/></svg></button>
 </div>
 <div id="progress"><i></i></div>
+<div id="toast"></div>
+
+<!-- 開場載入畫面：人物、音樂、影片全部載完才顯示「按 → 開始」 -->
+<div id="loader">
+  <div class="ld-box">
+    <div class="kicker">NCMEA 醫事放射組第二場｜2026.10.31 林口長庚</div>
+    <h1><span>情境模擬競賽</span><span class="hl">考後報告</span></h1>
+    <div class="ld-bar"><i></i></div>
+    <div class="ld-row"><span class="ld-msg">載入中</span><b class="ld-pct">0%</b></div>
+    <div class="ld-warn"></div>
+    <div class="ld-go">按 <kbd>→</kbd> 開始</div>
+  </div>
+</div>
 
 <script src="dist/deck.js?v=1"></script>
 </body>

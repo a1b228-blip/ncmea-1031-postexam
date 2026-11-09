@@ -1,7 +1,8 @@
 // 音效（WebAudio 即時合成，不需音檔）：預設開啟、按 M 靜音。
 // 聲音原則：清亮、柔和、5 秒內淡出，不用持續低頻嗡鳴。
+import { bindSrc } from "./preload.js";
 let ctx = null, master = null, wet = null, muted = false;
-let tickT = null, monT = null, monGet = null, pulseT = null, paT = null, paVoice = null;
+let tickT = null, monT = null, monGet = null, pulseT = null, paT = null, paVoice = null, lineT = null, lineA = null;
 
 function ensure() {
   if (ctx) { if (ctx.state === "suspended") ctx.resume(); return ctx; }
@@ -75,11 +76,26 @@ export const sfx = {
     [784, 659.25, 523.25].forEach((f, i) => tone(f, t + i * 0.42, { dur: 1.5, vol: 0.085 }));
     bgm.duck(true);                                     // 廣播時背景音樂壓低
     paT = setTimeout(() => {
-      paVoice ||= new Audio("assets/voice/pa_999.mp3");
+      paVoice ||= bindSrc(new Audio(), "assets/voice/pa_999.mp3");
       paVoice.currentTime = 0; paVoice.volume = 1;
       paVoice.onended = () => bgm.duck(false);
       paVoice.play().catch(() => bgm.duck(false));
     }, 1400);
+  },
+  // 第 14 頁兒子台詞（Edge-TTS YunJhe 男聲）：delay 秒後播，播放時背景音樂壓低
+  line(path, delay = 0) {
+    this.stopLine();
+    if (!ensure() || muted) return;
+    lineT = setTimeout(() => {
+      lineA = bindSrc(new Audio(), path); lineA.volume = 1;
+      bgm.duck(true);
+      lineA.onended = () => bgm.duck(false);
+      lineA.play().catch(() => bgm.duck(false));
+    }, delay * 1000);
+  },
+  stopLine() {
+    clearTimeout(lineT); lineT = null;
+    if (lineA) { if (!lineA.paused) bgm.duck(false); lineA.pause(); lineA = null; }
   },
   stopPaging() {
     clearTimeout(paT); paT = null;
@@ -156,7 +172,7 @@ const tracks = {};
 let curName = null, curLevel = 1, ducked = false;
 const track = (name) => {
   if (!tracks[name]) {
-    const a = new Audio(`assets/music/${name}.mp3`);
+    const a = bindSrc(new Audio(), `assets/music/${name}.mp3`);   // 載入畫面載完後自動換成記憶體裡的版本
     a.loop = name !== "08_credits"; a.preload = "auto"; a.volume = 0; a._target = 0;
     tracks[name] = a;
   }

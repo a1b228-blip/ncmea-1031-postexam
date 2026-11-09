@@ -4,7 +4,7 @@
   "private": true,
   "description": "1031 情境模擬競賽考後報告 3D 簡報（參考藥劑科 RPA 第三版走廊模式）",
   "scripts": {
-    "build": "esbuild src/deck.js --bundle --format=iife --minify --outdir=dist",
+    "build": "node scripts/sizes.mjs && esbuild src/deck.js --bundle --format=iife --minify --outdir=dist",
     "watch": "esbuild src/deck.js --bundle --format=iife --outdir=dist --watch"
   },
   "dependencies": { "esbuild": "^0.24.0", "gsap": "^3.13.0", "three": "^0.170.0" }
