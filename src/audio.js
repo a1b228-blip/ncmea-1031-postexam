@@ -3,6 +3,7 @@
 import { bindSrc } from "./preload.js";
 let ctx = null, master = null, wet = null, muted = false;
 let tickT = null, monT = null, monGet = null, pulseT = null, paT = null, paVoice = null, lineT = null, lineA = null;
+let musicLP = null, mriT = null, mriBus = null, ctBus = null;   // 背景音樂低通濾波器（變悶）、MRI 敲擊聲、CT 機架聲
 
 function ensure() {
   if (ctx) { if (ctx.state === "suspended") ctx.resume(); return ctx; }
@@ -14,6 +15,9 @@ function ensure() {
   const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600;
   wet = ctx.createGain(); wet.gain.value = 0.35;
   wet.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay); lp.connect(master);
+  // 背景音樂接進 WebAudio：中間加低通濾波器（第 12 頁心跳變慢時音樂慢慢變悶）
+  musicLP = ctx.createBiquadFilter(); musicLP.type = "lowpass"; musicLP.frequency.value = 22000; musicLP.Q.value = 0.5; musicLP.connect(ctx.destination);
+  Object.values(tracks).forEach(routeTrack);
   return ctx;
 }
 
@@ -59,6 +63,7 @@ export const sfx = {
       if (v.mode !== "arrest") alarms = 0;
       if (v.mode === "arrest") {
         if (alarms++ >= 4) { monT = setTimeout(beat, 500); return; }
+        sfx.onAlarm?.(alarms);                            // 畫面同步（第 12 頁泛紅閃爍）；靜音時畫面照樣閃
         if (ensure() && !muted) [0, 0.2, 0.4].forEach((d) => tone(988, ctx.currentTime + d, { dur: 0.16, vol: 0.05, type: "triangle" }));
         monT = setTimeout(beat, 2600); return;
       }
@@ -96,6 +101,40 @@ export const sfx = {
   stopLine() {
     clearTimeout(lineT); lineT = null;
     if (lineA) { if (!lineA.paused) bgm.duck(false); lineA.pause(); lineA = null; }
+  },
+  // 第 10 頁 MRI 掃描：「叩叩叩」敲擊聲（每組 8 下、組間停頓），聲音在右喇叭（右邊是 MRI 畫面）；off 時立刻停（立即停止掃描）
+  mriScan(on) {
+    if (!on) { clearInterval(mriT); mriT = null; if (mriBus) { const b = mriBus; b.gain.cancelScheduledValues(ctx.currentTime); b.gain.setTargetAtTime(0, ctx.currentTime, 0.02); setTimeout(() => b.disconnect(), 300); mriBus = null; } return; }
+    if (mriT || !ensure()) return;
+    mriBus = ctx.createGain(); mriBus.gain.value = 0.9;
+    const pan = ctx.createStereoPanner(); pan.pan.value = 0.65; mriBus.connect(pan); pan.connect(master);
+    let n = 0; const bus = mriBus;
+    const knock = () => {
+      if (muted) return;
+      const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter();
+      o.type = "square"; o.frequency.setValueAtTime(820, t); o.frequency.exponentialRampToValueAtTime(560, t + 0.05);
+      bp.type = "bandpass"; bp.frequency.value = 900; bp.Q.value = 1.4;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      o.connect(bp); bp.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.08);
+    };
+    mriT = setInterval(() => { if (n++ % 11 < 8) knock(); }, 125);
+  },
+  // 第 10 頁 CT 掃描：機架旋轉的低鳴（左喇叭）
+  ctScan(on) {
+    if (!on) { if (ctBus) { const b = ctBus; b.gain.setTargetAtTime(0, ctx.currentTime, 0.25); setTimeout(() => { b.userData?.forEach((s) => s.stop()); b.disconnect(); }, 1500); ctBus = null; } return; }
+    if (ctBus || !ensure()) return;
+    ctBus = ctx.createGain(); ctBus.gain.value = 0; ctBus.gain.setTargetAtTime(1, ctx.currentTime, 0.5);
+    const pan = ctx.createStereoPanner(); pan.pan.value = -0.65; ctBus.connect(pan); pan.connect(master);
+    const hum = ctx.createOscillator(); hum.type = "sine"; hum.frequency.value = 62;
+    const hg = ctx.createGain(); hg.gain.value = 0.05; hum.connect(hg); hg.connect(ctBus);
+    const n = ctx.createBufferSource(), buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    n.buffer = buf; n.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 340; bp.Q.value = 2.5;
+    const ng = ctx.createGain(); ng.gain.value = 0.035;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 2.2; const lg = ctx.createGain(); lg.gain.value = 0.015; lfo.connect(lg); lg.connect(ng.gain);   // 旋轉時一強一弱
+    n.connect(bp); bp.connect(ng); ng.connect(ctBus);
+    hum.start(); n.start(); lfo.start(); ctBus.userData = [hum, n, lfo];
   },
   stopPaging() {
     clearTimeout(paT); paT = null;
@@ -174,7 +213,7 @@ const track = (name) => {
   if (!tracks[name]) {
     const a = bindSrc(new Audio(), `assets/music/${name}.mp3`);   // 載入畫面載完後自動換成記憶體裡的版本
     a.loop = name !== "08_credits"; a.preload = "auto"; a.volume = 0; a._target = 0;
-    tracks[name] = a;
+    tracks[name] = a; routeTrack(a);
   }
   return tracks[name];
 };
@@ -189,13 +228,15 @@ function fadeTo(a, v, dur = FADE, onDone) {
   };
   a._fade = setInterval(step, 30); step();
 }
+// 音樂接進 WebAudio（同一個元素只能接一次）：元素音量（淡入淡出）照舊有效，再經過低通濾波器
+function routeTrack(a) { if (!ctx || a._routed) return; a._routed = true; ctx.createMediaElementSource(a).connect(musicLP); }
 const want = (name) => (muted ? 0 : GAIN[name] * LEVEL * curLevel * (ducked ? 0.2 : 1));
 export const bgm = {
   // 切換到某一段音樂（交叉淡入淡出）；level＝這一段的相對音量；restart＝從頭播
-  set(name, { level = 1, restart = false } = {}) {
+  set(name, { level = 1, restart = false, fade = FADE } = {}) {
     const same = name === curName;
     curLevel = level;
-    if (!same && curName) { const old = track(curName); fadeTo(old, 0, FADE, () => { if (curName !== old._name) old.pause(); }); }
+    if (!same && curName) { const old = track(curName); fadeTo(old, 0, fade, () => { if (curName !== old._name) old.pause(); }); }
     curName = name;
     if (!name) return;
     const a = track(name); a._name = name;
@@ -208,7 +249,23 @@ export const bgm = {
   get state() { return { cur: curName, tracks: Object.fromEntries(Object.entries(tracks).map(([k, a]) => [k, { paused: a.paused, vol: +a.volume.toFixed(3), t: +a.currentTime.toFixed(1) }])) }; },
   // 封面第一次按鍵：先讓開場音樂響起（瀏覽器要按鍵後才能出聲）
   start() { this.started = true; if (curName) { const a = track(curName); a.play().catch(() => {}); fadeTo(a, want(curName)); } },
+  // 音樂變悶：低通濾波器在 sec 秒內移到 hz（22000＝正常、約 800＝像隔著一面牆）
+  // （還沒按過鍵、沒有建立音訊時不用動）
+  filter(hz, sec = 0) { if (!ctx || !musicLP) return; const f = musicLP.frequency, t = ctx.currentTime; f.cancelScheduledValues(t); f.setValueAtTime(Math.max(40, f.value), t); if (sec > 0) f.exponentialRampToValueAtTime(hz, t + sec); else f.setValueAtTime(hz, t); },
+  get cutoff() { return musicLP ? Math.round(musicLP.frequency.value) : null; },
   // 播影片時把背景音樂壓低
   duck(on) { ducked = on; this.refresh(); },
   refresh() { if (curName) fadeTo(track(curName), want(curName), 0.4); },
+};
+
+// 除錯用：量測聲音（window.__audio.tap() 回傳音樂與音效的音量 RMS）
+if (typeof window !== "undefined") window.__audio = {
+  tap() {
+    if (!ctx) return null;
+    const mk = (src) => { const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an); return an; };
+    const m = mk(musicLP), s = mk(master), d = new Float32Array(2048);
+    const rms = (an) => { an.getFloatTimeDomainData(d); let x = 0; for (const v of d) x += v * v; return +Math.sqrt(x / d.length).toFixed(4); };
+    const peak = (an) => { an.getFloatTimeDomainData(d); let x = 0; for (const v of d) x = Math.max(x, Math.abs(v)); return +x.toFixed(4); };
+    return { music: () => rms(m), sfx: () => rms(s), sfxPeak: () => peak(s), get state() { return ctx.state; } };
+  },
 };

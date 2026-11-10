@@ -1038,8 +1038,37 @@ export function createWorld(canvas) {
     for (const b of Object.values(B)) b.visible = false;
     for (const k of iv.show) { B[k].visible = true; B[k].userData.s0 ||= B[k].scale.clone(); B[k].scale.copy(B[k].userData.s0).multiplyScalar(iv.k || 1); if (animate) gsap.fromTo(B[k].material, { opacity: 0 }, { opacity: 1, duration: 0.5, delay: 1.2 }); }
   }
+  // 第 14 頁兒子衝進等候區：鏡頭切到瑞益（壓胸中）的眼睛，看著兒子衝過來大鬧，約 4.5 秒後拉回等候區全景
+  let pov = null;
+  const _ph = new THREE.Vector3(), _pt = new THREE.Vector3(), _pf = new THREE.Vector3();
+  function povStart() {
+    pov = true;
+    const P = personOf(crew[3]); if (P?.tag) P.tag.visible = false;            // 自己的名字標籤不入鏡
+    gsap.killTweensOf([dualAim.mri.p, dualAim.mri.l, dualCam.mri]);
+    dualCam.mri.fov = 78;                                                        // 眼睛的視野比監視器鏡頭寬
+    document.body.classList.add("pov");
+    gsap.fromTo("#flash", { opacity: 0.35 }, { opacity: 0, duration: 0.4 });
+    povUpdate();
+  }
+  function povUpdate() {
+    if (!pov || !boneWorld(crew[3], "head", _ph)) return;
+    if (!boneWorld(sp, "head", _pt)) _pt.set(sp.position.x, 21, sp.position.z);
+    _pf.subVectors(_pt, _ph).setY(0).normalize();
+    _pt.y = _ph.y - 9;                                                           // 視線中心往下約 14 度：上方看得到兒子的頭、下方看得到安妮胸口與自己壓胸的手
+    dualAim.mri.p.copy(_ph).addScaledVector(_pf, 1.8); dualAim.mri.p.y += 0.8 - crew[3].position.y * 0.5;   // 眼睛在頭骨前上方；壓胸的上下晃動減半
+    dualAim.mri.l.copy(_pt);
+  }
+  function povEnd(animate) {
+    if (!pov) return;
+    pov = null;
+    const P = personOf(crew[3]); if (P?.tag) P.tag.visible = true;
+    document.body.classList.remove("pov");
+    if (animate) { gsap.to(dualCam.mri, { fov: 48, duration: 1.6, ease: "power2.inOut" }); aimDual("mri", DUAL_POSE.mri[24], true); }
+    else dualCam.mri.fov = 48;
+  }
   function setDualCore(step, animate, ms = step) {        // ms＝MRI 那一側的步驟（第 9 頁新流程兩邊步驟對不齊時用）
     dualTl?.kill(); dualTl = null;
+    povEnd(false);
     [...crew, ...team999, sp].forEach((m) => { m.rotation.x = 0; m.rotation.z = 0; gsap.killTweensOf(personOf(m)); personOf(m).bow = 0; });   // 第 17 頁鞠躬中途離開時還原
     sonShake?.kill(); sonShake = null;
     const was = dualOn; dualOn = step != null;
@@ -1335,6 +1364,7 @@ export function createWorld(canvas) {
       tl.call(() => { B.runOut.visible = true; }, null, 1.2);
     }
     if (step === 24) {                                   // 等候區：兒子衝進來大鬧；CT 放射師追過來安撫
+      tl.call(povStart, null, 0.4); tl.call(() => povEnd(true), null, 4.9);   // 中間 4.5 秒是瑞益的第一人稱視角
       B.riot.visible = B.calmW.visible = false;
       walk(tl, sp, SON_OUT.at(-1), [[312, 312], SON_RIOT.slice(0, 2)], 0.2, SON_RIOT[2], 40);
       walk(tl, crew[0], RAD_OUT_END, [[306, 292], [316, 306], RAD_CALM.slice(0, 2)], 0.6, RAD_CALM[2], 34);
@@ -1408,6 +1438,7 @@ export function createWorld(canvas) {
     animateDevices(now);
     brief.update();
     if (dualOn) updateCables();
+    if (pov) povUpdate();
     if (liveOn) { renderer.setRenderTarget(liveRT); renderer.render(scene, liveCam); renderer.setRenderTarget(null); }
   }
 

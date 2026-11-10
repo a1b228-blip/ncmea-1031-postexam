@@ -351,14 +351,35 @@ function musicCue(id, step) {
   switch (id) {
     case "cover": return ["01_opening"];                                    // ① 開場
     case "exam": return step === 0 ? ["02_flow"] : step <= 2 ? ["03_countdown"] : ["04_exam"];   // ③ 讀題幹 30 秒 → 分組進考場
-    case "dual": case "scan": case "handle": return ["04_exam"];             // ④ 考試進行
-    case "arrest": return ["05_worse"];                                      // ⑤ 病況惡化
+    case "scan": return ["04_exam", step === 1 || step === 2 ? 0.7 : 1];      // ④ 考試進行（掃描聲出現時音樂稍微讓開）
+    case "dual": case "handle": return ["04_exam"];                         // ④ 考試進行
+    case "arrest": return step === 2 ? [null, 1, false, 0.25] : ["05_worse", step ? 0.6 : 0.8];   // ⑤ 病況惡化：心跳停止那一刻音樂切掉，只剩監視器警報
     case "cpr": return ["06_emergency"];                                     // ⑥ 急救高峰
     case "family": return ["06_emergency", step >= 3 ? 0.5 : 1];             //    999 團隊到場後慢慢收掉
     case "debrief": case "trm": case "isbar": case "points": return ["07_review"];         // ⑦-a Debrief、回顧
     case "credits": return ["08_credits", 1, true];                          // ⑦-b 片尾（每次進來從頭播）
     default: return ["02_flow"];                                             // ② 當天流程（第 2–7 頁）
   }
+}
+
+// ---------- 第 12 頁心跳停止：畫面四周泛紅（跟監視器警報同步閃 4 次，之後留一層淡紅），監視器放大到畫面中央 2 秒再縮回 ----------
+let arrestTl = null;
+function arrestFx(on, animate) {
+  const al = $("#alarm"), mw = $('.slide[data-id="arrest"] .mon-win');
+  arrestTl?.kill(); arrestTl = null;
+  sfx.onAlarm = null;
+  if (!on) { gsap.killTweensOf(al); gsap.to(al, { opacity: 0, duration: animate ? 0.8 : 0 }); gsap.set(mw, { x: 0, y: 0, scale: 1 }); return; }
+  if (!animate) { gsap.set(al, { opacity: 0.22 }); gsap.set(mw, { x: 0, y: 0, scale: 1 }); return; }
+  const dx = 800 - (mw.offsetLeft + mw.offsetWidth / 2), dy = 450 - (mw.offsetTop + mw.offsetHeight / 2);
+  arrestTl = gsap.timeline();
+  arrestTl.fromTo(al, { opacity: 0 }, { opacity: 1, duration: 0.12, ease: "power2.out" }, 0)               // 心跳停止的瞬間：整圈紅光閃一下
+    .to(al, { opacity: 0.4, duration: 0.5 }, 0.12);
+  sfx.onAlarm = (n) => {                                                                                       // 跟著監視器三連音警報閃（共 4 次），最後一次之後留一層淡紅
+    const tl = gsap.timeline(); tl.to(al, { opacity: 0.85, duration: 0.1 }).to(al, { opacity: 0.4, duration: 0.55, ease: "sine.out" }, "+=0.35");
+    if (n >= 4) tl.to(al, { opacity: 0.22, duration: 1.5 }, "+=1.2");
+  };
+  arrestTl.to(mw, { x: dx, y: dy, scale: 2.3, duration: 0.55, ease: "power3.out" }, 0.15)                     // 監視器放大到畫面中央：看到心跳變成一直線
+    .to(mw, { x: 0, y: 0, scale: 1, duration: 0.6, ease: "power2.inOut" }, 2.6);
 }
 
 // ---------- Debrief：倒數碼錶（快轉）＋ERCP 依序亮起＋考官問題依序出現 ----------
@@ -476,8 +497,14 @@ function render(prevSi, animate) {
   apply3D(si, step, animate, prevSi);
   HOOKS[ids[si]]?.(sl, step, animate);
   // 背景音樂（依情境切換、交叉淡入淡出）＋與畫面同步的音效層
-  const [mName, mLevel = 1, mRestart = false] = musicCue(ids[si], step);
-  bgm.set(mName, { level: mLevel, restart: mRestart });
+  const [mName, mLevel = 1, mRestart = false, mFade] = musicCue(ids[si], step);
+  bgm.set(mName, { level: mLevel, restart: mRestart, ...(mFade ? { fade: mFade } : {}) });
+  // 第 12 頁：心跳 78 → 40 時音樂慢慢變悶（像耳朵被摀住），推出等候區時更悶；其他頁恢復正常
+  if (ids[si] === "arrest" && step < 2) bgm.filter(step ? 650 : 900, animate ? (step ? 2 : 11) : 0);
+  else if (ids[si] !== "arrest") bgm.filter(22000, animate ? 0.8 : 0);
+  // 第 10 頁：MRI 掃描敲擊聲（送進磁體 → 躁動；立即停止掃描時突然停）、CT 機架聲（打藥掃描起）；左右喇叭對應左右畫面
+  sfx.mriScan(ids[si] === "scan" && (step === 1 || step === 2));
+  sfx.ctScan(ids[si] === "scan" && step >= 1);
   sfx.monitor(ids[si] === "arrest", () => annieVitals);                       // 第 12 頁：監視器嗶聲跟著心跳變慢
   sfx.pulse((ids[si] === "cpr" && step >= 2) || ids[si] === "family");        // 第 13、14 頁：壓胸節奏
   if (animate && ids[si] === "cpr" && step === 4) setTimeout(() => sfx.paging(), 300);   // 全院廣播：廣播鈴＋「地下室，MRI，999」語音
@@ -487,6 +514,7 @@ function render(prevSi, animate) {
   if (animate && ids[si] === "family" && step < 3) sfx.line(`assets/voice/son_${step + 1}.mp3`, SON_LINE[step]);
   else if (!animate || ids[si] !== "family" || step >= 3) sfx.stopLine();
   if (ids[si] !== "exam" && stemTw) stemCountdown(false);      // 離開第 8 頁就停掉倒數
+  arrestFx(ids[si] === "arrest" && step === 2, animate);
   if (ids[si] !== "credits") stopCredits();
   if (ids[si] !== "debrief") stopDebriefTimer();                    // 離開第 17 頁就停掉片尾捲動與煙火
   const c = sl.dataset.chip || "";
@@ -586,12 +614,12 @@ function setLite(on, tell) {
 // 畫面不順偵測：開始後若連續 5 秒平均低於每秒 24 格，提示一次可以按 P
 const fps = { n: 0, t: 0, low: 0, told: false };
 function watchFps(dt) {
-  if (loading || fps.told || W.isLite()) return;
+  if (loading !== "ready" || fps.told || W.isLite()) return;          // 只在載入完成、等待按 → 的時候量（報告中不會跳出提示）
   fps.n++; fps.t += dt;
   if (fps.t < 1) return;
   const v = fps.n / fps.t; fps.n = 0; fps.t = 0;
   fps.low = v < 24 ? fps.low + 1 : 0;
-  if (fps.low >= 5) { fps.told = true; say("畫面不夠順？按 P 開效能模式", 6); }
+  if (fps.low >= 3) { fps.told = true; $(".ld-warn", ld).textContent = "這台電腦畫面不夠順，建議先按 P 開效能模式，再按 → 開始"; }
 }
 
 // ---------- 開始 ----------
