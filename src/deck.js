@@ -109,7 +109,8 @@ const SLIDES = {
   },
   // 第 9 頁：兩間考場同時進行（左右雙畫面）
   dual: {
-    steps: [...[0, 1, 2, 3].map((d) => (d ? { dual: d } : { dual: 0, door: null, doorView: null, hl: [], routes: [] })), { dual: 40 }],   // 40＝瑞益移除痠痛貼布、暖暖包（考題陷阱）
+    // 41 考官遞單 → 0 病人辨識 → 42 拿同意書確認 → 43 CT 解釋檢查｜MRI 看 X 光＋金屬探測器 → 44 CT 躺床打針｜MRI 人工檢測 → 40 移除痠痛貼布、暖暖包
+    steps: [{ dual: 41, door: null, doorView: null, hl: [], routes: [] }, { dual: 0 }, { dual: 42 }, { dual: 43 }, { dual: 44 }, { dual: 40 }],
   },
   // 第 10 頁：執行檢查與影像判讀（延續雙畫面）
   scan: {
@@ -442,7 +443,7 @@ const HOOKS = {
   isbar: (sl, step) => { sl.dataset.step = step; $$(".isbar-list li", sl).forEach((li) => { const s = +li.dataset.s; li.className = s < step ? "done" : s === step ? "now" : ""; }); },
   scan: scanHook,
   handle: scanHook,
-  dual: (sl, step) => $$(".dual-list li", sl).forEach((li) => { const s = +li.dataset.s; li.className = s < step ? "done" : s === step ? "now" : ""; }),
+  dual: (sl, step) => { sl.dataset.step = step; $$(".dual-list li", sl).forEach((li) => { const s = +li.dataset.s; li.className = s < step ? "done" : s === step ? "now" : ""; }); },   // 同意書小視窗依步驟顯示（見 deck.css）
   exam: (sl, step, animate) => {
     if (step === 1) { if (animate) stemCountdown(true); } else if (step === 0) stemCountdown(false);
     $(".side", sl).classList.toggle("done", step >= 3);          // 分組之後收起題幹與考官卡，留位置給分組與標準病人

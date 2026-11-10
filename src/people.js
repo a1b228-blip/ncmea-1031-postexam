@@ -100,6 +100,8 @@ function arms(P, t) {
       case "teach": R = { up: -0.95 + s(t * 2.2) * 0.1, out: 0.12, tw: 0.35, el: -0.85 + s(t * 3) * 0.15 }; L = { up: -0.5, out: 0.05, tw: 0.25, el: -1.2 + s(t * 2.6) * 0.1 }; break;   // 雙手在胸前比劃說明
       case "angry": L = { up: -1.9 + s(t * 7) * 0.5, out: 0.35, el: -0.9 }; R = { up: -1.9 - s(t * 7) * 0.5, out: 0.35, el: -0.9 }; spine = 0.08; break;
       case "sit": L = { up: -0.45, out: 0.05, el: -1.0 }; R = { up: -0.45, out: 0.05, el: -1.0 }; break;
+      case "score": L = { up: -0.16, out: -0.2, tw: 0.55, el: -0.6, ey: -0.42 }; R = { up: -0.3 + s(t * 1.3) * 0.03, out: -0.25, tw: 0.4, el: -0.5 + s(t * 7) * 0.05, ey: -0.07 }; break;   // 考官：左手托評分夾板（腰前）、右手寫字（數值用骨頭位置算出來）
+      case "hold": L = { up: -0.16, out: -0.2, tw: 0.55, el: -0.6, ey: -0.42 }; R = { up: -0.3, out: -0.25, tw: 0.4, el: -0.5, ey: -0.07 }; break;                                     // 拿著單子看（同意書）
       case "sitTalk": L = { up: -0.45, out: 0.05, el: -1.0 }; R = { up: -0.8 + s(t * 2.6) * 0.18, out: 0.18, el: -1.15 + s(t * 3.3) * 0.25 }; spine = 0.06; break;
     }
   }
@@ -140,6 +142,7 @@ export function updatePeople(dt, t) {
     arms(P, t); legs(P);
     if (P.tag) placeTag(P);
     phoneProp(P);
+    sheetProp(P);
   }
 }
 // 打電話：右手拿一支手機（掛在手掌骨頭上，單位＝公尺）
@@ -160,6 +163,26 @@ function phoneProp(P) {
   }
   P.phone.visible = on;
   if (on) { const b = P.phone.userData.body; b.scale.set(...PHONE.size); P.phone.position.set(...PHONE.at); P.phone.rotation.set(...PHONE.rot); }
+}
+// 考官的評分夾板（score）／考生手上的單子（hold）：掛在左手掌骨頭上（單位＝公尺）
+const SHEET = { at: [0.02, 0.1, 0.06], rot: [0.6, -0.3, 0.3], board: [0.24, 0.32, 0.012], paper: [0.21, 0.29, 0.004] };
+if (typeof window !== "undefined") window.__sheet = SHEET;
+let boardMat = null, paperMat = null;
+function sheetProp(P) {
+  const kind = P.walkAmp < 0.5 ? (P.pose === "score" ? "board" : P.pose === "hold" ? "paper" : null) : (P.pose === "score" ? "board" : null);   // 走路時考官仍拿著夾板
+  if (!kind && !P.sheet) return;
+  if (!P.sheet) {
+    const hand = P.bones.hand_l?.b; if (!hand) return;
+    phoneGeo ||= new THREE.BoxGeometry(1, 1, 1);
+    boardMat ||= new THREE.MeshStandardMaterial({ color: 0x8b5e34, roughness: 0.6 });
+    paperMat ||= new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+    const g = new THREE.Group(), board = new THREE.Mesh(phoneGeo, boardMat), paper = new THREE.Mesh(phoneGeo, paperMat);
+    board.castShadow = paper.castShadow = true; g.add(board, paper); g.userData = { board, paper }; hand.add(g); P.sheet = g;
+  }
+  const g = P.sheet; g.visible = !!kind; if (!kind) return;
+  g.position.set(...SHEET.at); g.rotation.set(...SHEET.rot);
+  g.userData.board.visible = kind === "board"; g.userData.board.scale.set(...SHEET.board);
+  g.userData.paper.scale.set(...SHEET.paper); g.userData.paper.position.z = kind === "board" ? 0.009 : 0;
 }
 // 名字標籤跟著頭走：坐著、躺著、鞠躬時都停在頭頂正上方固定距離（原本固定用站姿身高，坐下時會浮太高）
 const _h = new THREE.Vector3(), _s = new THREE.Vector3();

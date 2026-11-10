@@ -612,7 +612,7 @@ export function createWorld(canvas) {
   const crew = DOOR_CREW.map((d, i) => { const m = makePerson(CREW_IDS[i]); m.position.set(d.at[0], 0, d.at[1]); doorScene.add(m); return m; });
   const sp = makePerson("son"); sp.visible = false; doorScene.add(sp);     // 標準病人（兒子）
   {
-    const ex = makePerson("examiner", { label: false }); ex.position.set(284, 0, 272); ex.rotation.y = Math.atan2(24, -12); doorScene.add(ex);      // 考官（面向隊員）
+    const ex = makePerson("examiner", { label: false }); ex.position.set(284, 0, 272); ex.rotation.y = Math.atan2(24, -12); doorScene.add(ex); doorScene.userData.ex = ex;      // 考官（面向隊員）
     const badge = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.6, 1.8), mat(0xffffff)); badge.position.set(2.7, 11.5, 0); ex.add(badge);
     const clip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 3.8), mat(0x7c5c3b)); clip.position.set(3.4, 10, -1.8); clip.rotation.z = 0.5; ex.add(clip);
     // 題幹看板（立架＋紙），面向隊員（-x）
@@ -643,7 +643,8 @@ export function createWorld(canvas) {
   }
   function setDoorScene(mode, animate) {
     crewTl?.kill(); crewTl = null;
-    doorScene.visible = !!mode;
+    doorScene.visible = !!mode; doorModeNow = mode;
+    if (mode === "split" || mode === "spToCT") placeExam("ct", "mriW"); else if (!dualOn) placeExam(null);
     if (!mode) return;
     const door = mode === "door";
     DOOR_CREW.forEach((d, i) => {
@@ -669,7 +670,7 @@ export function createWorld(canvas) {
     mri: [
       { pos: [343, 64, 369], look: [318, 2, 322] },                // 病人辨識、金屬探測
       { pos: [343, 64, 369], look: [318, 2, 322] },
-      { pos: [333, 44, 318], look: [368, 12, 342] },               // 帶到 MRI 控制台（看 PACS 螢幕）
+      { pos: [336, 78, 386], look: [336, 2, 326] },                // 云玎到 MRI 控制台看 X 光＋瑞益同步掃金屬探測器（兩個都看得到）
       { pos: [338, 50, 360], look: [318, 2, 326] },                // 人工檢查：拉近安妮
       { pos: [347, 78, 382], look: [392, 0, 334] },                // 第 10 頁：MRI 室（推床進來、過床、送進磁體）
       { pos: [347, 78, 382], look: [392, 0, 334] },
@@ -691,9 +692,9 @@ export function createWorld(canvas) {
       { pos: [350, 74, 296], look: [321, 0, 327] },
       { pos: [354, 138, 414], look: [334, 0, 334] },               // 14 起：從等候區南邊往北看（看得到兒子從走廊衝進來）
       { pos: [354, 138, 414], look: [334, 0, 334] },
-      { pos: [322, 128, 410], look: [322, 0, 328] },               // 14 第 3 步起：只剩 MRI 單一畫面，等候區置中
-      { pos: [322, 128, 410], look: [322, 0, 328] },
-      { pos: [322, 128, 410], look: [322, 0, 328] },
+      { pos: [327, 79, 376], look: [322, 0, 318] },                // 14 第 3 步起：只剩 MRI 單一畫面，鏡頭拉近等候區（家屬大鬧＋急救是重點，走道不入鏡）
+      { pos: [327, 79, 376], look: [322, 0, 318] },
+      { pos: [327, 79, 376], look: [322, 0, 318] },
       { pos: [292, 112, 398], look: [290, 0, 328] },               // 15 TRM：整個畫面只用這個鏡頭，等候區放在畫面右邊（左邊放文字卡）
       { pos: [292, 112, 398], look: [290, 0, 328] },
       { pos: [292, 112, 398], look: [290, 0, 328] },
@@ -768,6 +769,8 @@ export function createWorld(canvas) {
     team999: badge("院內 999 急救團隊到場", "#7c3aed", 1.5), handoff999: badge("護理師 → 急救團隊 交班", "#16a34a", 1.5),
     crown: badge("👑 領導者", "#ca8a04", 1.6), endHand: badge("護理師 → 醫師 交班，考試結束", "#16a34a", 1.5),
     qCpr: badge("C：壓胸", "#dc2626", 1.6), qBvm: badge("背板、BVM，氧氣開到最大", "#0284c7", 1.6), qPads: badge("D：貼上貼片判讀（沒有電擊）", "#ca8a04", 1.6), detect: badge("金屬探測", "#7c3aed"), pacs: badge("PACS 看 X 光", "#7c3aed"), manual: badge("人工檢查", "#ea580c"),
+    formsCT: badge("考官給同意書", "#475569", 2), formsMRI: badge("考官給檢查單、檢查同意書", "#475569"),
+    consentCT: badge("確認對比劑檢查同意書內容", "#0284c7", 2), consentMRI: badge("用同意書確認金屬異物", "#7c3aed"),
     trapPatch: badge("⚠ 頸部痠痛貼布", "#dc2626"), trapWarmer: badge("⚠ 口袋暖暖包", "#dc2626"),
     trapTake: badge("移除痠痛貼布、暖暖包", "#ea580c"), trapDesk: badge("✓ 放在檢查控制台", "#16a34a"),
   };
@@ -885,6 +888,24 @@ export function createWorld(canvas) {
   const T999_IN = [[306, 250], [306, 290], [312, 312]];
   const T999 = [[337, 337, [328, 342]], [324, 320, [319, 330]], [312, 320, [319, 330]]];
   let sonShake = null;
+  // ---------- 考場考官：每間檢查室一男一女，拿評分夾板在旁邊打分數（與 Debrief 的 4 位考官同一批人） ----------
+  const EXAM = { ct: ["examiner", "examiner2"], mri: ["examiner3", "examiner4"] };
+  for (const k of ["ct", "mri"]) EXAM[k] = EXAM[k].map((id) => { const m = makePerson(id, { label: false }); m.visible = false; scene.add(m); setPose(m, "score"); return m; });
+  const EX_SPOT = {
+    ct: [[372, 211, [398, 245]], [384, 211, [398, 245]]],        // CT 室北牆
+    mriW: [[306, 304, [319, 330]], [316, 303, [319, 330]]],      // MRI 等候區北側（第 9 頁）
+    mriR: [[372, 305, [395, 335]], [384, 305, [395, 335]]],      // MRI 室北牆（第 10–12 頁）
+    mriE: [[341, 312, [319, 330]], [341, 322, [319, 330]]],      // 急救時：等候區東側
+    ctE: [[297, 348, [319, 330]], [297, 358, [319, 330]]],       // 急救時 CT 考官跟過來：等候區西側
+  };
+  const examAll = () => [...EXAM.ct, ...EXAM.mri];
+  function placeExam(ctKey, mriKey) {
+    examAll().forEach((m) => { m.visible = !!ctKey; setPose(m, "score"); });
+    if (doorScene.userData.ex) doorScene.userData.ex.visible = !ctKey;      // 門口給題幹的考官＝CT 男考官：進考場後只留檢查室裡那位
+    if (!ctKey) return;
+    EXAM.ct.forEach((m, i) => putAt(m, EX_SPOT[ctKey][i])); EXAM.mri.forEach((m, i) => putAt(m, EX_SPOT[mriKey][i]));
+  }
+  let doorModeNow = null;
   // 第 15 頁：領導者腳下的金色光圈（跟著 👑 領導者標記移動）
   const leadRing = new THREE.Mesh(new THREE.TorusGeometry(5.5, 0.6, 10, 40), new THREE.MeshBasicMaterial({ color: 0xfacc15, toneMapped: false }));
   leadRing.rotation.x = -Math.PI / 2; leadRing.position.y = 0.6; leadRing.visible = false; scene.add(leadRing);
@@ -924,7 +945,7 @@ export function createWorld(canvas) {
   const CUR_LOW = { pos: [319, 72, 400], look: [319, 10, 343] }, CUR_HIGH = { pos: [300, 300, 540], look: [325, 0, 300] };
   function curtain(step, animate) {
     const a = dualAim.mri, p0 = a.p.clone(), l0 = a.l.clone(), wasOn = dualOn;
-    setDualCore(26, false);
+    setDualCore(26, false); placeExam(null); doorScene.userData.ex.visible = false;   // 片尾：考官都不在場
     for (const b of Object.values(B)) b.visible = false;
     leadRing.visible = false; compress(false); showO2(false); bvm.visible = false;
     cart.position.set(338, 0, 308);                    // 急救車移到推床後面，不擋住謝幕的人
@@ -978,9 +999,37 @@ export function createWorld(canvas) {
     }, null, ">+0.2");
     tl.call(deskBadge, null, ">+0.8");
   }
+  // 第 9 頁第 1 步：考官遞單子（CT：同意書給鼎晨；MRI：檢查單＋同意書給瑞益）；第 3 步：拿著同意書跟病人確認
+  function formsGive(animate) {
+    setDualCore(0, false);
+    B.idSP.visible = B.idAnne.visible = false;
+    const pairs = [[EXAM.ct[0], crew[0], B.formsCT], [EXAM.mri[0], crew[3], B.formsMRI]];
+    const done = (c, b) => { setPose(c, "hold"); b.visible = true; over(b, c, 27); };
+    if (!animate) { pairs.forEach(([, c, b]) => done(c, b)); return; }
+    const tl = dualTl = gsap.timeline();
+    pairs.forEach(([ex, c, b]) => {
+      const h = [ex.position.x, ex.position.z], dx = h[0] - c.position.x, dz = h[1] - c.position.z, d = Math.hypot(dx, dz);
+      const to = [c.position.x + (dx / d) * 6, c.position.z + (dz / d) * 6], t1 = 0.4 + (d - 6) / 20;
+      walk(tl, ex, h, [to], 0.4, [c.position.x, c.position.z], 20);
+      tl.call(() => { face(c, ...to); done(c, b); b.material.opacity = 0; gsap.to(b.material, { opacity: 1, duration: 0.4 }); }, null, t1 + 0.5);
+      walk(tl, ex, to, [h], t1 + 1.6, ex === EXAM.ct[0] ? EX_SPOT.ct[0][2] : EX_SPOT.mriW[0][2], 20);
+      tl.call(() => setPose(ex, "score"), null, t1 + 1.6 + (d - 6) / 20 + 0.1);
+    });
+  }
+  function consentCheck(animate) {
+    setDualCore(0, false);
+    B.idSP.visible = B.idAnne.visible = false;
+    setPose(crew[0], "hold"); setPose(crew[3], "hold");
+    const show = (b, c, h) => { b.visible = true; over(b, c, h); if (animate) gsap.fromTo(b.material, { opacity: 0 }, { opacity: 1, duration: 0.4, delay: 0.4 }); };
+    show(B.consentCT, crew[0], 27); show(B.consentMRI, crew[3], 27);
+  }
   function setDual(step, animate) {
     if (step === 38 || step === 39) return curtain(step, animate);
     if (step === 40) return removeTraps(animate);
+    if (step === 41) return formsGive(animate);
+    if (step === 42) return consentCheck(animate);
+    if (step === 43) return setDualCore(1, animate, 2);   // CT 解釋檢查｜MRI 另一位同仁看 X 光＋瑞益同步金屬探測器
+    if (step === 44) return setDualCore(2, animate, 3);   // CT 躺床打針｜MRI 人工檢測
     const iv = ISBAR_VIEW[step];
     if (!iv) return setDualCore(step, animate);
     const a = dualAim.mri, p0 = a.p.clone(), l0 = a.l.clone(), wasOn = dualOn;
@@ -989,7 +1038,7 @@ export function createWorld(canvas) {
     for (const b of Object.values(B)) b.visible = false;
     for (const k of iv.show) { B[k].visible = true; B[k].userData.s0 ||= B[k].scale.clone(); B[k].scale.copy(B[k].userData.s0).multiplyScalar(iv.k || 1); if (animate) gsap.fromTo(B[k].material, { opacity: 0 }, { opacity: 1, duration: 0.5, delay: 1.2 }); }
   }
-  function setDualCore(step, animate) {
+  function setDualCore(step, animate, ms = step) {        // ms＝MRI 那一側的步驟（第 9 頁新流程兩邊步驟對不齊時用）
     dualTl?.kill(); dualTl = null;
     [...crew, ...team999, sp].forEach((m) => { m.rotation.x = 0; m.rotation.z = 0; gsap.killTweensOf(personOf(m)); personOf(m).bow = 0; });   // 第 17 頁鞠躬中途離開時還原
     sonShake?.kill(); sonShake = null;
@@ -997,6 +1046,7 @@ export function createWorld(canvas) {
     if (!dualOn) {                                     // 離開第 9 頁：只還原第 9 頁自己改過的東西
       if (was) {
         team999.forEach((m) => { m.visible = false; }); leadRing.visible = false;
+        if (doorModeNow !== "split" && doorModeNow !== "spToCT") placeExam(null);
         for (const b of Object.values(B)) b.visible = false;
         checkRings.forEach((r) => { r.visible = false; });
         wandHand.visible = false; standWand.visible = true; ivMark.visible = false; mriScreen.material.map = homeTex;
@@ -1009,8 +1059,8 @@ export function createWorld(canvas) {
     for (const b of Object.values(B)) { b.visible = false; b.material.opacity = 1; if (b.userData.s0) b.scale.copy(b.userData.s0); }   // 第 16 頁放大過的標籤還原   // 上一步的淡入被中斷時，透明度要還原
     checkRings.forEach((r) => { r.visible = false; });
     aimDual("ct", DUAL_POSE.ct, false);
-    aimDual("mri", DUAL_POSE.mri[step], animate && step > 0);
-    if (!(animate && step > 0)) aimDual("mri", DUAL_POSE.mri[step], false);
+    aimDual("mri", DUAL_POSE.mri[ms], animate && ms > 0);
+    if (!(animate && ms > 0)) aimDual("mri", DUAL_POSE.mri[ms], false);
     // 最終定點（不播動畫時直接到位）
     standSP(); putAt(sp, CT_SP); if (step >= 2) lieSP();
     if (step >= 4) sp.position.x = SP_LIE.pos[0] + SP_IN_DX;
@@ -1029,8 +1079,8 @@ export function createWorld(canvas) {
       putAt(crew[0], step === 9 || step >= 12 ? CT_RAD_LIE : CT_RAD_CON); putAt(crew[1], step >= 19 ? N_ARRIVE : step >= 9 ? CT_NURSE_IV : CT_NURSE_CON);
     }
     if (step >= 13) annieBack();
-    putAt(crew[2], step >= 18 ? R_HEAD : step >= 16 ? R_PHONE : step >= 13 ? R_HEAD : step === 12 ? M_A_SIDE : step === 8 ? M_A_SIDE : step >= 4 ? M_A_CON2 : step >= 2 ? M_A_CON : M_A);
-    putAt(crew[3], step >= 13 ? R_CPR : step >= 8 ? M_B_SIDE : step >= 4 ? M_B_CON2 : step >= 3 ? M_B_MANUAL : step >= 1 ? M_B_SWEPT : M_B);
+    putAt(crew[2], ms >= 18 ? R_HEAD : ms >= 16 ? R_PHONE : ms >= 13 ? R_HEAD : ms === 12 ? M_A_SIDE : ms === 8 ? M_A_SIDE : ms >= 4 ? M_A_CON2 : ms >= 2 ? M_A_CON : M_A);
+    putAt(crew[3], ms >= 13 ? R_CPR : ms >= 8 ? M_B_SIDE : ms >= 4 ? M_B_CON2 : ms >= 3 ? M_B_MANUAL : ms >= 1 ? M_B_SWEPT : M_B);
     if (step >= 17) compress(true);
     // 第 14 頁：兒子起身 → 衝出 CT 室 → 在等候區大鬧 → 被帶到旁邊；CT 放射師一路跟著安撫
     if (step >= 22) {
@@ -1040,11 +1090,12 @@ export function createWorld(canvas) {
       if (step === 24) sonShake = gsap.to(sp.rotation, { z: 0.1, duration: 0.16, repeat: -1, yoyo: true, ease: "sine.inOut" });
     }
     team999.forEach((m, i) => { m.visible = step >= 25; putAt(m, T999[i]); });
+    placeExam(step >= 23 ? "ctE" : "ct", ms >= 13 ? "mriE" : ms >= 4 ? "mriR" : "mriW");
     if (step >= 26) face(crew[1], T999[0][0], T999[0][1]);
     // 姿勢：走路時會自動換成走路動作，停下來才擺出這些姿勢
     for (const m of [...crew, sp, ...team999]) setPose(m, "stand");
     if (step >= 2 && step < 22) setPose(sp, "lie");                       // 兒子躺在 CT 床上
-    if (step === 1 || step === 2) { setPose(crew[3], "wand"); gsap.killTweensOf(wandSweep); wandSweep.a = 0; }   // 瑞益拿探測棒
+    if (ms === 1 || ms === 2) { setPose(crew[3], "wand"); gsap.killTweensOf(wandSweep); wandSweep.a = 0; }   // 瑞益拿探測棒
     if (step >= 9 && step <= 11) setPose(crew[2], "phone");              // MRI：聯絡臨床醫師
     if (step === 10) setPose(crew[0], "phone");                          // CT：跟臨床交班
     if (step === 11 || step === 26) setPose(crew[1], "teach");           // 曉鏵衛教／跟醫師交班
@@ -1053,17 +1104,20 @@ export function createWorld(canvas) {
     if (step >= 18 && step <= 31) setPose(crew[2], "bvm");               // 云玎擠 BVM
     if (step === 22 || step === 24) setPose(crew[0], "calm");            // 鼎晨安撫兒子
     if (step === 22 || step === 24) setPose(sp, "angry");                // 兒子激動、大鬧
-    wandHand.visible = step === 1 || step === 2; standWand.visible = !wandHand.visible;
+    wandHand.visible = ms === 1 || ms === 2; standWand.visible = !wandHand.visible;
     ivMark.visible = step >= 2;
-    mriScreen.material.map = step >= 2 && step <= 3 ? pacsTex : homeTex;
-    B.idSP.visible = B.idAnne.visible = step === 0;
+    mriScreen.material.map = ms >= 2 && ms <= 3 ? pacsTex : homeTex;
+    B.idSP.visible = step === 0; B.idAnne.visible = ms === 0;
     over(B.idSP, sp, 26); B.idAnne.position.set(319, 18, 330);
-    if (step === 1) { B.explain.visible = true; over(B.explain, crew[0]); B.detect.visible = true; over(B.detect, crew[3]); }
-    if (step === 2) { B.line.visible = true; B.line.position.set(402, 24, 232); B.pacs.visible = true; over(B.pacs, crew[2]); }
-    if (step === 3) { B.teach.visible = true; over(B.teach, crew[0]); B.manual.visible = true; over(B.manual, crew[3]); checkRings.forEach((r) => { r.visible = true; }); }
-    if (step <= 3) trapsOnAnnie(); else trapsOnDesk();
-    checkRings.forEach((r, i) => r.material.color.set(step === 3 && TRAP_RINGS.includes(i) ? 0xef4444 : 0xf97316));
-    if (step === 3) { const n = annie.localToWorld(new THREE.Vector3(-30, 6, 0)), w = annie.localToWorld(new THREE.Vector3(4, 7.5, 5.4));
+    if (step === 1) { B.explain.visible = true; over(B.explain, crew[0]); }
+    if (ms === 1 || ms === 2) { B.detect.visible = true; over(B.detect, crew[3]); }   // 瑞益用金屬探測器（新流程：同時另一位同仁去看 X 光）
+    if (step === 2) { B.line.visible = true; B.line.position.set(402, 24, 232); }
+    if (ms === 2) { B.pacs.visible = true; over(B.pacs, crew[2]); }
+    if (step === 3) { B.teach.visible = true; over(B.teach, crew[0]); }
+    if (ms === 3) { B.manual.visible = true; over(B.manual, crew[3]); checkRings.forEach((r) => { r.visible = true; }); }
+    if (ms <= 3) trapsOnAnnie(); else trapsOnDesk();
+    checkRings.forEach((r, i) => r.material.color.set(ms === 3 && TRAP_RINGS.includes(i) ? 0xef4444 : 0xf97316));
+    if (ms === 3) { const n = annie.localToWorld(new THREE.Vector3(-30, 6, 0)), w = annie.localToWorld(new THREE.Vector3(4, 7.5, 5.4));
       B.trapPatch.visible = B.trapWarmer.visible = true; B.trapPatch.position.set(n.x - 5, 18, n.z - 2); B.trapWarmer.position.set(w.x + 9, 18, w.z + 2); }
     if (step === 8) { B.stopCT.visible = true; over(B.stopCT, crew[0]); B.lookMRI.visible = true; B.lookMRI.position.set(400, 18, 335); }
     if (step === 9) { B.swell.visible = true; B.swell.position.set(400, 24, 230); }
@@ -1084,7 +1138,7 @@ export function createWorld(canvas) {
     if (step >= 22 && step <= 25) A(B.leader, crew[1].position.x, 25, crew[1].position.z);
     if (step === 22) { A(B.sonUpset, 380, 36, 248); A(B.calmCT, 378, 26, 256); }
     if (step === 23) A(B.runOut, 370, 30, 246);
-    if (step === 24) { A(B.riot, sp.position.x, 25, sp.position.z); A(B.calmW, crew[0].position.x, 35, crew[0].position.z); }
+    if (step === 24) { A(B.riot, sp.position.x, 25, sp.position.z); A(B.calmW, crew[0].position.x, 30, crew[0].position.z); }
     if (step === 25) A(B.team999, T999[0][0], 37, T999[0][1]);
     if (step === 26) A(B.handoff999, 332, 26, 340);
     // 第 15 頁：領導者標記（壓胸的放射師 → 護理師）、最後交班給醫師；高品質急救亮起壓胸、BVM、貼片
@@ -1097,9 +1151,10 @@ export function createWorld(canvas) {
     // 動畫：從上一步的位置走到這一步
     const tl = dualTl = gsap.timeline();
     const pop = (spr, t) => { spr.scale.multiplyScalar(1); tl.fromTo(spr.material, { opacity: 0 }, { opacity: 1, duration: 0.4 }, t); };
-    if (step === 0) { pop(B.idSP, 0.4); pop(B.idAnne, 0.7); }
-    if (step === 1) {
-      pop(B.explain, 0.3);
+    if (step === 0) pop(B.idSP, 0.4);
+    if (ms === 0) pop(B.idAnne, 0.7);
+    if (step === 1) pop(B.explain, 0.3);
+    if (ms === 1 || ms === 2) {
       // 放射師拿起探測棒，從安妮頭部掃到腳
       putAt(crew[3], M_B); wandHand.visible = false; standWand.visible = true; B.detect.visible = false;
       walk(tl, crew[3], [325, 320], [[338, 352]], 0.2, [338, 370]);
@@ -1126,6 +1181,8 @@ export function createWorld(canvas) {
       const ln = { v: 0 };
       tl.to(ln, { v: 1, duration: 1.8, ease: "power1.inOut", onUpdate: () => lineDraw(ln.v) }, ">+0.8");
       tl.call(() => { B.iv.visible = false; B.line.visible = true; B.line.position.set(402, 24, 232); }, null, ">");
+    }
+    if (ms === 2) {
       // MRI：另一位放射師到 MRI 控制台，螢幕切到 PACS 看胸部 X 光
       putAt(crew[2], M_A); mriScreen.material.map = homeTex; B.pacs.visible = false;
       walk(tl, crew[2], [313, 320], [[340, 318], [340, 356], [357, 356], [357, 335]], 0.3, [380, 335]);
@@ -1164,6 +1221,10 @@ export function createWorld(canvas) {
       walk(tl, crew[2], [STR_PARK[0] + 17, STR_PARK[1]], [[392, 362], [357, 362], [357, 330]], t0 + 8.3, [380, 330]);
       walk(tl, crew[3], [STR_PARK[0] - 16, STR_PARK[1]], [[379, 360], [357, 360], [357, 342]], t0 + 8.3, [380, 342]);
     }
+    const exWalk = (m, from, path, t0, look) => walk(tl, m, from, path, t0, look, 20);
+    if (step === 4) EXAM.mri.forEach((m, i) => { putAt(m, EX_SPOT.mriW[i]); exWalk(m, EX_SPOT.mriW[i], [[300 + i * 4, 340], [300 + i * 4, 362], [362, 362], EX_SPOT.mriR[i].slice(0, 2)], 9 + i * 0.6, EX_SPOT.mriR[i][2]); });
+    if (step === 13) EXAM.mri.forEach((m, i) => { putAt(m, EX_SPOT.mriR[i]); exWalk(m, EX_SPOT.mriR[i], [[372 + i * 4, 362], [346, 362], EX_SPOT.mriE[i].slice(0, 2)], 1.2 + i * 0.5, EX_SPOT.mriE[i][2]); });
+    if (step === 23) EXAM.ct.forEach((m, i) => { putAt(m, EX_SPOT.ct[i]); exWalk(m, EX_SPOT.ct[i], [[380, 236], [340, 246], [306, 250], [302, 300], EX_SPOT.ctE[i].slice(0, 2)], 1.6 + i * 0.6, EX_SPOT.ctE[i][2]); });
     if (step === 5) {                                     // MRI：送進磁體開始掃描
       annieOnTable(ANNIE_TABLE[0]);
       tl.to(annie.position, { x: ANNIE_BORE, duration: 2.4, ease: "power1.inOut" }, 0.2);
@@ -1279,7 +1340,7 @@ export function createWorld(canvas) {
       walk(tl, crew[0], RAD_OUT_END, [[306, 292], [316, 306], RAD_CALM.slice(0, 2)], 0.6, RAD_CALM[2], 34);
       const tEnd = tl.duration();
       tl.call(() => { B.riot.visible = true; over(B.riot, sp, 25); }, null, tEnd - 1);
-      tl.call(() => { B.calmW.visible = true; over(B.calmW, crew[0], 35); }, null, tEnd + 0.2);
+      tl.call(() => { B.calmW.visible = true; over(B.calmW, crew[0], 30); }, null, tEnd + 0.2);
     }
     if (step === 25) {                                   // 999 急救團隊從走廊進來；CT 放射師把兒子帶到旁邊
       B.team999.visible = false;
