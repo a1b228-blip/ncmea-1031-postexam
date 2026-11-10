@@ -307,8 +307,8 @@ h2.small { font-size: 38px; top: 84px; }
 .cf-row.q { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 10px; background: #fee2e2; border: 2px solid #ef4444; }
 .cf-row.q b { color: #dc2626; font-size: 22px; }
 .cf-go { display: none; margin-top: 10px; padding: 8px 12px; border-radius: 10px; background: #7c3aed; color: #fff; font-size: 18px; font-weight: 800; }
-.slide[data-id="dual"][data-step="2"] .cf-win, .slide[data-id="dual"][data-step="3"] .cf-win.r { opacity: 1; transform: none; }
-.slide[data-id="dual"][data-step="3"] .cf-go { display: block; }
+.slide[data-id="dual"][data-step="1"] .cf-win, .slide[data-id="dual"][data-step="2"] .cf-win.r { opacity: 1; transform: none; }
+.slide[data-id="dual"][data-step="2"] .cf-go { display: block; }
 
 /* 第 12 頁心跳停止：畫面四周泛紅，跟著監視器三連音警報一起閃；監視器放大到畫面中央 2 秒 */
 #alarm { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; z-index: 3; opacity: 0;
@@ -322,3 +322,6 @@ h2.small { font-size: 38px; top: 84px; }
 body.pov .pov-tag { opacity: 1; }
 body.pov .vignette { background: radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(3,8,16,.9) 100%); }
 body.pov .slide[data-id="family"] .cam-tag, body.pov .slide[data-id="family"] .mon-win, body.pov .slide[data-id="family"] .dual-list, body.pov .slide[data-id="family"] .dual-title { opacity: 0 !important; transition: opacity .4s; }   /* 第一人稱時收起清單、標題，畫面只留視角標籤與字幕 */
+
+/* 8 第 5 步（左 CT、右 MRI）：左下角只留兒子去 CT 與 CT 遞單兩張卡，分組卡與 MRI 遞單卡收起 */
+.slide[data-id="exam"][data-step="4"] .side.left .split, .slide[data-id="exam"][data-step="4"] .side.left .forms-mri { display: none; }

@@ -13,26 +13,30 @@ from mathutils import Matrix
 for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)
 
 # ---- 人物設定（身高 cm；weight＝MakeHuman 體重 0..1，0.5＝標準；color＝衣服顏色（線性色彩），None＝保留原本材質） ----
-BLUE = (0.025, 0.08, 0.34, 1)     # 放射師藍色制服
+BLUE = (0.20, 0.36, 0.68, 1)      # 放射師淺藍刷手服（2026-11-10 依使用者提供的團體照改淺藍）
+NURSE_TOP = (0.82, 0.78, 0.80, 1); NURSE_PANTS = (0.64, 0.16, 0.22, 1)   # 護理師：淺色花紋上衣（簡化成淺色）＋粉紅褲
+BLACK = (0.02, 0.02, 0.025, 1); BEIGE = (0.73, 0.61, 0.49, 1)           # 秀蒂：黑色上衣＋米色長褲
 PINK = (0.80, 0.30, 0.42, 1)      # 護理師
 GOWN = (0.33, 0.56, 0.64, 1)      # 病人服（淺藍綠）
 TOP_M, TOP_F = "elvs_crude_t-shirt_male", "joepal_crude_t-shirt_female"
 PANTS = "toigo_wool_pants"
 GLASSES = "spamrakuen_tbm_glasses_frames_01"
+THIN = (GLASSES, (0.13, 0.14, 0.15, 1))                                  # 槍灰色細鏡框（只有鏡框的款式；kwnet 那款鏡片跟鏡框同一個零件，改色會變墨鏡）
+ROUND = (GLASSES, (0.03, 0.025, 0.02, 1))                                # 深色鏡框（toigo 圓框只出現一邊，不用）
 
 PEOPLE = [
-    dict(id="dingchen", name="鼎晨", gender=1, age=0.55, height=175, weight=0.5,  hair="short02", skin="young_asian_male",   tint=None,
-         clothes=[(TOP_M, BLUE), (PANTS, BLUE)], glasses=True),
-    dict(id="xiaohua",  name="曉鏵", gender=0, age=0.52, height=160, weight=0.5,  hair="ponytail01", skin="young_asian_female", tint=None,
-         clothes=[(TOP_F, PINK), (PANTS, PINK)], glasses=True),
-    dict(id="ruiyi",    name="瑞益", gender=1, age=0.58, height=172, weight=0.62, hair="short04", skin="young_asian_male",   tint=None,
-         clothes=[(TOP_M, BLUE), (PANTS, BLUE)], glasses=True),
+    dict(id="dingchen", name="鼎晨", gender=1, age=0.55, height=175, weight=0.6,  hair="short01", skin="young_asian_male",   tint=None,
+         clothes=[(TOP_M, BLUE), (PANTS, BLUE)], glasses=THIN),                  # 平頭、細框眼鏡、較壯
+    dict(id="xiaohua",  name="曉鏵", gender=0, age=0.58, height=160, weight=0.5,  hair="ponytail01", skin="young_asian_female", tint=None,
+         clothes=[(TOP_F, NURSE_TOP), (PANTS, NURSE_PANTS)], glasses=THIN),      # 頭髮往後綁、細框眼鏡
+    dict(id="ruiyi",    name="瑞益", gender=1, age=0.55, height=172, weight=0.55, hair="short04", skin="young_asian_male",   tint=None,
+         clothes=[(TOP_M, BLUE), (PANTS, BLUE)], glasses=THIN),                  # 短髮、細框眼鏡
     dict(id="yunding",  name="云玎", gender=0, age=0.52, height=155, weight=0.8,  hair="ponytail01", skin="young_asian_female", tint=(0.78, 0.66, 0.56),
-         clothes=[(TOP_F, BLUE), (PANTS, BLUE)], glasses=False),
+         clothes=[(TOP_F, BLUE), (PANTS, BLUE)], glasses=False),                 # 綁髮、不戴眼鏡
     dict(id="son",      name="兒子", gender=1, age=0.62, height=180, weight=0.78, hair="short02", skin="young_asian_male",   tint=None,
          clothes=[(TOP_M, GOWN), (PANTS, GOWN)], glasses=True),
-    dict(id="xiudi",    name="秀蒂", gender=0, age=0.62, height=155, weight=0.5,  hair="long01", skin="young_asian_female", tint=None,
-         clothes=[("toigo_shift_dress", None)], glasses=True),
+    dict(id="xiudi",    name="秀蒂", gender=0, age=0.6, height=155, weight=0.45, hair="long01", skin="young_asian_female", tint=None,
+         clothes=[(TOP_F, BLACK), (PANTS, BEIGE)], glasses=ROUND),               # 深色直髮（bob02 是白色側分蓋眼，不像）、深色鏡框、黑上衣＋米色褲
 ]
 TEAL = (0.02, 0.22, 0.26, 1)      # 999 急救團隊
 WHITE = (0.80, 0.82, 0.84, 1)     # 醫師
@@ -59,7 +63,44 @@ EXTRA = [
     dict(id="other_f", name="其他隊伍", gender=0, age=0.5, height=160, weight=0.5, hair="bob02", skin="young_asian_female", tint=None,
          clothes=[("female_casualsuit01", None)], glasses=False),
 ]
+# ---- 臉部設計（2026-11-10 加）：讓每個人臉型、眼睛、鼻子、嘴巴、下巴、眉毛都不一樣 ----
+# 名稱前面是 eye-／cheek-／eye-bag 的會自動左右兩邊一起套（l-…、r-…）；brow＝眉毛款式（eyebrow001～012）
+FACE = {
+    # 主角（依使用者描述）
+    "dingchen": dict(k=1, brow="eyebrow010", t={"head-round": .6, "head-scale-horiz-incr": .35, "cheek-volume-incr": .45, "chin-width-incr": .35,
+                     "eye-scale-decr": .2, "nose-point-width-incr": .25, "mouth-angles-up": .35, "mouth-scale-horiz-incr": .15}),          # 圓寬臉、小眼、笑
+    "ruiyi":    dict(k=1, brow="eyebrow006", t={"head-oval": .6, "head-scale-vert-incr": .25, "head-scale-horiz-decr": .25, "chin-prominent-incr": .35,
+                     "chin-width-incr": .25, "cheek-bones-incr": .3, "ear-scale-incr": .45, "eyebrows-angle-up": .2, "mouth-angles-up": .25}),  # 長臉、下顎線明顯、耳朵較明顯
+    "son":      dict(brow="eyebrow004", t={"head-round": .5, "head-fat-incr": .35, "cheek-volume-incr": .35, "chin-width-incr": .3, "chin-height-decr": .2,
+                     "nose-point-width-incr": .3, "nose-scale-vert-decr": .2, "eye-scale-decr": .2, "mouth-lowerlip-volume-incr": .3, "eyebrows-angle-down": .3}),  # 圓臉（收斂一點）
+    "xiaohua":  dict(k=1, brow="eyebrow003", t={"head-oval": .55, "head-scale-vert-incr": .2, "cheek-bones-incr": .2, "chin-prominent-incr": .2,
+                     "eye-scale-decr": .1, "mouth-scale-horiz-decr": .1, "mouth-angles-up": .15}),                                     # 鵝蛋臉
+    "yunding":  dict(k=1, brow="eyebrow007", t={"head-round": .85, "head-fat-incr": .6, "cheek-volume-incr": .6, "chin-width-incr": .3,
+                     "eye-scale-decr": .1, "nose-point-width-incr": .3, "mouth-angles-up": .3, "eyebrows-angle-down": .1}),               # 圓臉、臉頰豐滿、笑
+    "xiudi":    dict(k=1, brow="eyebrow002", t={"head-oval": .6, "head-scale-horiz-decr": .25, "cheek-bones-incr": .3, "chin-triangle": .3,
+                     "eye-scale-incr": .1, "mouth-angles-up": .4, "mouth-scale-horiz-incr": .15}),                                     # 瘦長臉、笑容
+    # 配角（隨機但彼此不同）
+    "examiner":  dict(brow="eyebrow011", t={"head-rectangular": .6, "chin-width-incr": .3, "nose-hump-incr": .3, "eye-bag-incr": .4, "mouth-angles-down": .3, "eyebrows-trans-down": .2}),
+    "examiner2": dict(brow="eyebrow003", t={"head-diamond": .5, "cheek-bones-incr": .4, "eye-scale-decr": .1, "nose-point-up": .2, "mouth-scale-horiz-decr": .2}),
+    "examiner3": dict(brow="eyebrow012", t={"head-triangular": .5, "chin-prognathism-incr": .3, "nose-scale-depth-incr": .3, "eye-scale-incr": .2, "mouth-upperlip-volume-decr": .3, "eyebrows-angle-up": .2}),
+    "examiner4": dict(brow="eyebrow005", t={"head-oval": .4, "head-scale-horiz-decr": .2, "eye-corner2-down": .2, "nose-scale-horiz-decr": .2, "mouth-lowerlip-volume-incr": .2, "mouth-angles-up": .2}),
+    "doctor":    dict(brow="eyebrow008", t={"head-square": .4, "head-scale-vert-incr": .2, "nose-hump-incr": .2, "nose-scale-vert-incr": .3, "eye-bag-incr": .2, "chin-prominent-incr": .3}),
+    "medic_m":   dict(brow="eyebrow010", t={"head-round": .3, "eye-scale-incr": .2, "nose-point-width-incr": .3, "mouth-scale-horiz-incr": .2}),
+    "medic_f":   dict(brow="eyebrow002", t={"head-invertedtriangular": .4, "eye-corner2-up": .2, "nose-point-up": .3}),
+    "other_m":   dict(brow="eyebrow006", t={"head-rectangular": .4, "chin-cleft-incr": .3, "eye-height2-decr": .3}),
+    "other_f":   dict(brow="eyebrow004", t={"head-round": .4, "cheek-volume-incr": .3, "eye-scale-incr": .3}),
+}
+NOFACE = bool(os.environ.get("NOFACE"))     # 設了就照舊（做「修改前」對照用）
+FACE_K = float(os.environ.get("FACE_K", "1.8"))   # 臉部調整強度倍數（第一版 1.0 太細微，看不出差別）
+def face_targets(t, mult=None):
+    out = []
+    for k, v in t.items():
+        v = min(1.0, v * (FACE_K if mult is None else mult))
+        for name in ((f"l-{k}", f"r-{k}") if k.startswith(("eye-", "cheek-", "ear-")) else (k,)):
+            out.append({"target": name, "value": v})
+    return out
 if os.environ.get("EXTRA"): PEOPLE = EXTRA
+if os.environ.get("ALL"): PEOPLE = PEOPLE + EXTRA
 ONLY = os.environ.get("ONLY")       # 只做某幾位（逗號分隔 id）
 if ONLY: PEOPLE = [p for p in PEOPLE if p["id"] in ONLY.split(",")]
 
@@ -96,11 +137,14 @@ def build(p, x):
                              race={"asian": 1.0, "caucasian": 0.0, "african": 0.0})
     info["rig"] = "game_engine"
     info["eyes"] = find("eyes", "high-poly"); info["eyes_material_type"] = "MAKESKIN"
-    info["eyebrows"] = find("eyebrows", "eyebrow001"); info["eyelashes"] = find("eyelashes", "eyelashes01")
+    face = None if NOFACE else FACE.get(p["id"])
+    info["eyebrows"] = find("eyebrows", face["brow"] if face else "eyebrow001"); info["eyelashes"] = find("eyelashes", "eyelashes01")
+    if face: info["targets"] = face_targets(face["t"], face.get("k"))
     info["hair"] = find("hair", p["hair"])
     info["teeth"] = ""; info["tongue"] = ""
     info["skin_mhmat"] = find_skin(p["skin"]); info["skin_material_type"] = "MAKESKIN"
-    info["clothes"] = [find("clothes", c) for c, _ in p["clothes"]] + [find("clothes", "shoes02")] + ([find("clothes", GLASSES)] if p["glasses"] else [])
+    gl = (GLASSES, (0.015, 0.015, 0.02, 1)) if p["glasses"] is True else p["glasses"] or None
+    info["clothes"] = [find("clothes", c) for c, _ in p["clothes"]] + [find("clothes", "shoes02")] + ([find("clothes", gl[0])] if gl else [])
     st = HumanService.get_default_deserialization_settings(); st["subdiv_levels"] = 0
     body = HumanService.deserialize_from_dict(info, st)
     rig = body.parent if body.parent and body.parent.type == "ARMATURE" else None
@@ -116,10 +160,10 @@ def build(p, x):
     for o in children(root):
         if o.type == "MESH" and "cardigan" in o.name:
             d = o.modifiers.new("撐開", "DISPLACE"); d.strength = 0.015; d.mid_level = 0.0
-    # 眼鏡：鏡框改成深色，看得清楚
+    # 眼鏡：鏡框改成指定顏色（鏡片部分也一起變成同色細框，看得清楚）
     for o in children(root):
-        if o.type == "MESH" and GLASSES in o.name:
-            o.data.materials.clear(); o.data.materials.append(solid((0.015, 0.015, 0.02, 1), 0.35))
+        if gl and o.type == "MESH" and gl[0] in o.name:
+            o.data.materials.clear(); o.data.materials.append(solid(gl[1], 0.35))
     # 膚色偏深：在接到 Base Color 的皮膚貼圖後面乘上顏色
     if p["tint"]:
         for m in body.data.materials:
@@ -178,6 +222,21 @@ for p, root in made:
     bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, f"{p['id']}.glb"), use_selection=True, export_format="GLB",
                               export_image_format="JPEG", export_apply=True, export_animations=False, export_yup=True)
     root.location.x = x0
+
+# 大頭照（HEADS=1）：每人一張臉部特寫，給使用者比較臉型
+if os.environ.get("HEADS"):
+    os.makedirs(os.path.join(OUT, "heads"), exist_ok=True)
+    bpy.ops.object.light_add(type="AREA", location=(0, -3, 3)); bpy.context.object.data.energy = 300; bpy.context.object.data.size = 4
+    bpy.ops.object.light_add(type="AREA", location=(-2, -2, 1.8)); bpy.context.object.data.energy = 120; bpy.context.object.data.size = 3
+    w = bpy.context.scene.world or bpy.data.worlds.new("w"); bpy.context.scene.world = w; w.use_nodes = True
+    w.node_tree.nodes["Background"].inputs[0].default_value = (0.82, 0.85, 0.9, 1); w.node_tree.nodes["Background"].inputs[1].default_value = 0.6
+    sc = bpy.context.scene; sc.render.engine = "BLENDER_EEVEE_NEXT"; sc.render.resolution_x = 420; sc.render.resolution_y = 500
+    bpy.ops.object.camera_add(); cam = bpy.context.object; cam.data.lens = 85; sc.camera = cam
+    for p, root in made:
+        hz = p["height"] / 100 * 0.925
+        cam.location = (root.location.x, -1.25, hz); cam.rotation_euler = (math.radians(90), 0, 0)
+        sc.render.filepath = os.path.join(OUT, "heads", f"{p['id']}.png"); bpy.ops.render.render(write_still=True)
+    print("DONE", flush=True); sys.exit(0)
 
 # 排排站預覽圖
 bpy.ops.object.camera_add(location=(0, -7.5, 1.05), rotation=(math.radians(88), 0, 0))

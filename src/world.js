@@ -657,10 +657,30 @@ export function createWorld(canvas) {
       const e = mode === "spToCT" ? SP.path.at(-1) : SP.at;
       sp.position.set(e[0], 0, e[1]); face(sp, ...(mode === "spToCT" ? SP.endLook : SP.look));
     }
-    if (!animate || door) return;
+    // 單子：MRI 一進去考官就把檢查單、同意書交給瑞益；CT 等兒子過去時才交給鼎晨（之後兩人一直拿著，到第 9 頁確認同意書）
+    crew.forEach((m) => setPose(m, "stand"));
+    B.formsMRI.visible = B.formsCT.visible = false;
+    if (door) return;
+    const mriDone = () => { setPose(crew[3], "hold"); B.formsMRI.visible = mode === "split"; over(B.formsMRI, crew[3], 27); };
+    const ctDone = () => { setPose(crew[0], "hold"); B.formsCT.visible = true; over(B.formsCT, crew[0], 27); };
+    if (!animate) { mriDone(); if (mode === "spToCT") ctDone(); return; }
     crewTl = gsap.timeline();
-    if (mode === "split") DOOR_CREW.forEach((d, i) => walk(crewTl, crew[i], d.at, d.path, i < 2 ? 0 : 0.5, d.look));
-    else walk(crewTl, sp, SP.at, SP.path, 0.3, SP.endLook);
+    if (mode === "split") {
+      DOOR_CREW.forEach((d, i) => walk(crewTl, crew[i], d.at, d.path, i < 2 ? 0 : 0.5, d.look));
+      giveForms(crewTl, EXAM.mri[0], crew[3], DOOR_CREW[3].path.at(-1), EX_SPOT.mriW[0], mriDone, crewTl.duration() + 0.3);
+    } else {
+      mriDone();
+      walk(crewTl, sp, SP.at, SP.path, 0.3, SP.endLook);
+      giveForms(crewTl, EXAM.ct[0], crew[0], DOOR_CREW[0].path.at(-1), EX_SPOT.ct[0], ctDone, 6.2);
+    }
+  }
+  // 考官走到考生面前遞單子再走回原位（at＝考生站的位置，home＝考官原位 [x, z, 面向]）
+  function giveForms(tl, ex, c, at, home, done, t0) {
+    const dx = home[0] - at[0], dz = home[1] - at[1], d = Math.hypot(dx, dz), to = [at[0] + (dx / d) * 6, at[1] + (dz / d) * 6], tw = (d - 6) / 20;
+    tl.call(() => setPose(ex, "score"), null, t0);
+    walk(tl, ex, home.slice(0, 2), [to], t0, at, 20);
+    tl.call(() => { face(c, ...to); done(); }, null, t0 + tw + 0.5);
+    walk(tl, ex, to, [home.slice(0, 2)], t0 + tw + 1.5, home[2], 20);
   }
 
   // ---------- 第 9 頁：兩間考場同時進行（左 CT 室、右 MRI 等候區，兩台監視器鏡頭） ----------
@@ -769,7 +789,7 @@ export function createWorld(canvas) {
     team999: badge("院內 999 急救團隊到場", "#7c3aed", 1.5), handoff999: badge("護理師 → 急救團隊 交班", "#16a34a", 1.5),
     crown: badge("👑 領導者", "#ca8a04", 1.6), endHand: badge("護理師 → 醫師 交班，考試結束", "#16a34a", 1.5),
     qCpr: badge("C：壓胸", "#dc2626", 1.6), qBvm: badge("背板、BVM，氧氣開到最大", "#0284c7", 1.6), qPads: badge("D：貼上貼片判讀（沒有電擊）", "#ca8a04", 1.6), detect: badge("金屬探測", "#7c3aed"), pacs: badge("PACS 看 X 光", "#7c3aed"), manual: badge("人工檢查", "#ea580c"),
-    formsCT: badge("考官給同意書", "#475569", 2), formsMRI: badge("考官給檢查單、檢查同意書", "#475569"),
+    formsCT: badge("考官給檢查單、檢查同意書", "#475569", 2), formsMRI: badge("考官給檢查單、檢查同意書", "#475569"),
     consentCT: badge("確認對比劑檢查同意書內容", "#0284c7", 2), consentMRI: badge("用同意書確認金屬異物", "#7c3aed"),
     trapPatch: badge("⚠ 頸部痠痛貼布", "#dc2626"), trapWarmer: badge("⚠ 口袋暖暖包", "#dc2626"),
     trapTake: badge("移除痠痛貼布、暖暖包", "#ea580c"), trapDesk: badge("✓ 放在檢查控制台", "#16a34a"),
@@ -999,23 +1019,7 @@ export function createWorld(canvas) {
     }, null, ">+0.2");
     tl.call(deskBadge, null, ">+0.8");
   }
-  // 第 9 頁第 1 步：考官遞單子（CT：同意書給鼎晨；MRI：檢查單＋同意書給瑞益）；第 3 步：拿著同意書跟病人確認
-  function formsGive(animate) {
-    setDualCore(0, false);
-    B.idSP.visible = B.idAnne.visible = false;
-    const pairs = [[EXAM.ct[0], crew[0], B.formsCT], [EXAM.mri[0], crew[3], B.formsMRI]];
-    const done = (c, b) => { setPose(c, "hold"); b.visible = true; over(b, c, 27); };
-    if (!animate) { pairs.forEach(([, c, b]) => done(c, b)); return; }
-    const tl = dualTl = gsap.timeline();
-    pairs.forEach(([ex, c, b]) => {
-      const h = [ex.position.x, ex.position.z], dx = h[0] - c.position.x, dz = h[1] - c.position.z, d = Math.hypot(dx, dz);
-      const to = [c.position.x + (dx / d) * 6, c.position.z + (dz / d) * 6], t1 = 0.4 + (d - 6) / 20;
-      walk(tl, ex, h, [to], 0.4, [c.position.x, c.position.z], 20);
-      tl.call(() => { face(c, ...to); done(c, b); b.material.opacity = 0; gsap.to(b.material, { opacity: 1, duration: 0.4 }); }, null, t1 + 0.5);
-      walk(tl, ex, to, [h], t1 + 1.6, ex === EXAM.ct[0] ? EX_SPOT.ct[0][2] : EX_SPOT.mriW[0][2], 20);
-      tl.call(() => setPose(ex, "score"), null, t1 + 1.6 + (d - 6) / 20 + 0.1);
-    });
-  }
+  // 第 9 頁第 2 步：拿著同意書跟病人確認（遞單在第 8 頁：MRI 一進去就給瑞益；CT 等兒子過去才給鼎晨）
   function consentCheck(animate) {
     setDualCore(0, false);
     B.idSP.visible = B.idAnne.visible = false;
@@ -1026,7 +1030,6 @@ export function createWorld(canvas) {
   function setDual(step, animate) {
     if (step === 38 || step === 39) return curtain(step, animate);
     if (step === 40) return removeTraps(animate);
-    if (step === 41) return formsGive(animate);
     if (step === 42) return consentCheck(animate);
     if (step === 43) return setDualCore(1, animate, 2);   // CT 解釋檢查｜MRI 另一位同仁看 X 光＋瑞益同步金屬探測器
     if (step === 44) return setDualCore(2, animate, 3);   // CT 躺床打針｜MRI 人工檢測
@@ -1077,6 +1080,7 @@ export function createWorld(canvas) {
         team999.forEach((m) => { m.visible = false; }); leadRing.visible = false;
         if (doorModeNow !== "split" && doorModeNow !== "spToCT") placeExam(null);
         for (const b of Object.values(B)) b.visible = false;
+        if (doorModeNow === "split" || doorModeNow === "spToCT") { B.formsMRI.visible = doorModeNow === "split"; B.formsCT.visible = doorModeNow === "spToCT"; }   // 倒退回第 8 頁：遞單標籤留著
         checkRings.forEach((r) => { r.visible = false; });
         wandHand.visible = false; standWand.visible = true; ivMark.visible = false; mriScreen.material.map = homeTex;
         standSP(); lineDraw(0); setLineDX(0); annieHome(); swell.visible = false; trapsOnAnnie();
@@ -1131,6 +1135,8 @@ export function createWorld(canvas) {
     if (step === 16) setPose(crew[2], "phone");                          // 云玎撥 999
     if (step >= 17 && step <= 31) setPose(crew[3], "cpr");               // 瑞益壓胸
     if (step >= 18 && step <= 31) setPose(crew[2], "bvm");               // 云玎擠 BVM
+    if (step === 0) setPose(crew[0], "hold");                           // 第 9 頁病人辨識：手上拿著第 8 頁拿到的單子
+    if (ms === 0) setPose(crew[3], "hold");
     if (step === 22 || step === 24) setPose(crew[0], "calm");            // 鼎晨安撫兒子
     if (step === 22 || step === 24) setPose(sp, "angry");                // 兒子激動、大鬧
     wandHand.visible = ms === 1 || ms === 2; standWand.visible = !wandHand.visible;

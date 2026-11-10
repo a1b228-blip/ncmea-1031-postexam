@@ -13,9 +13,27 @@ const cache = new Map();
 // 同一個人物只下載一次；onProgress 給開場載入畫面算百分比（第一次呼叫時才會收到進度）
 // 下載失敗時（例如網路中斷）把快取清掉並自動重試，最多 3 次
 const load1 = (id, onProgress) => {
-  if (!cache.has(id)) cache.set(id, loader.loadAsync(`assets/people/${id}.glb`, onProgress).catch((e) => { cache.delete(id); throw e; }));
+  if (!cache.has(id)) cache.set(id, loader.loadAsync(`assets/people/${id}.glb`, onProgress).then(fixMaterials).catch((e) => { cache.delete(id); throw e; }));
   return cache.get(id);
 };
+// 修正 MakeHuman 匯出的材質：皮膚、頭髮、眉毛、睫毛、眼睛、鞋子都被標成「半透明＋不寫入深度」，
+// 會把後腦勺內側畫到臉上（臉變黑、出現色塊）。改成「鏤空」：透明處挖掉、其餘實心，前後就不會錯亂；
+// 皮膚、眼睛、鞋子再改成只畫正面（不會看到模型內側）。整份模型只修一次，複製出來的人物共用。
+const FRONT_ONLY = /(^|\.)(body|high-poly|shoes\d*)$/i;
+function fixMaterials(gltf) {
+  const seen = new Set();
+  gltf.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (!m || seen.has(m)) continue; seen.add(m);
+      if (!m.transparent) continue;
+      m.transparent = false; m.depthWrite = true; m.alphaTest = 0.5;
+      if (FRONT_ONLY.test(m.name)) m.side = THREE.FrontSide;
+      m.needsUpdate = true;
+    }
+  });
+  return gltf;
+}
 const load = (id, onProgress, tries = 3) => load1(id, onProgress).catch((e) => (tries > 1 ? new Promise((r) => setTimeout(r, 800)).then(() => load(id, onProgress, tries - 1)) : Promise.reject(e)));
 export const loadPerson = load;
 export const PEOPLE_INFO = {
@@ -51,7 +69,7 @@ export function makePerson(id, { label = true, tint = null } = {}) {
     m.scale.setScalar(U); m.rotation.y = Math.PI / 2;        // 模型面向 +z → 轉成面向 Group 的 +x
     m.traverse((o) => {
       if (!o.isMesh) return;
-      o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+      o.castShadow = !/eyebrow|eyelash/i.test(o.material?.name || ""); o.receiveShadow = true; o.frustumCulled = false;   // 眉毛、睫毛是透明小方片，不投影子（否則眼睛周圍會有一條黑帶）
       if (tint && o.material?.name?.toLowerCase().includes("cloth")) { o.material = o.material.clone(); o.material.color.multiply(new THREE.Color(tint)); }
     });
     g.add(m); P.model = m;

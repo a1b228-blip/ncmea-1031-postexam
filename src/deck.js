@@ -109,8 +109,8 @@ const SLIDES = {
   },
   // 第 9 頁：兩間考場同時進行（左右雙畫面）
   dual: {
-    // 41 考官遞單 → 0 病人辨識 → 42 拿同意書確認 → 43 CT 解釋檢查｜MRI 看 X 光＋金屬探測器 → 44 CT 躺床打針｜MRI 人工檢測 → 40 移除痠痛貼布、暖暖包
-    steps: [{ dual: 41, door: null, doorView: null, hl: [], routes: [] }, { dual: 0 }, { dual: 42 }, { dual: 43 }, { dual: 44 }, { dual: 40 }],
+    // （遞單在第 8 頁）0 病人辨識 → 42 拿同意書確認 → 43 CT 解釋檢查｜MRI 看 X 光＋金屬探測器 → 44 CT 躺床打針｜MRI 人工檢測 → 40 移除痠痛貼布、暖暖包
+    steps: [{ dual: 0, door: null, doorView: null, hl: [], routes: [] }, { dual: 42 }, { dual: 43 }, { dual: 44 }, { dual: 40 }],
   },
   // 第 10 頁：執行檢查與影像判讀（延續雙畫面）
   scan: {
@@ -680,4 +680,4 @@ function dismissLoader() {
 }
 // 除錯用：直接跳到某頁某步（不播動畫）
 const jumpTo = (id, k = 0) => { const p = si; si = Math.max(0, ids.indexOf(id)); step = Math.min(k, nSteps(si) - 1); render(p, false); flyTo(stateAt(si, step).cam, false); };
-window.__deck = { go, W, cam, X, bgm, setLite, jumpTo };
+window.__deck = { go, W, cam, X, bgm, setLite, jumpTo, gsap };
