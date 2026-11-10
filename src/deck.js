@@ -126,7 +126,8 @@ const SLIDES = {
   cpr: { split: 0.4, steps: [15, 16, 17, 18, 19, 20, 21].map((d) => ({ dual: d })) },
   // 第 14 頁：兒子（CT 標準病人）衝到等候區大鬧、999 急救團隊到場、護理師交班
   // 兒子衝出 CT 室之後（第 3 步起）CT 室沒有人了 → 只留 MRI 單一畫面
-  family: { split: 0.4, steps: [22, 23, 24, 25, 26].map((d) => ({ dual: d, ...(d >= 24 ? { split: 0 } : {}) })) },
+  // 45＝兒子拿手機偷拍、CT 放射師制止（插在大鬧之後、999 團隊到場之前）
+  family: { split: 0.4, steps: [22, 23, 24, 45, 25, 26].map((d) => ({ dual: d, ...(d >= 24 ? { split: 0 } : {}) })) },
   // 考試結束 → Debrief 教室（考官 4 位、考生 4 位面對面）→ 回觀摩教室休息
   debrief: {
     steps: [
@@ -355,7 +356,7 @@ function musicCue(id, step) {
     case "dual": case "handle": return ["04_exam"];                         // ④ 考試進行
     case "arrest": return step === 2 ? [null, 1, false, 0.25] : ["05_worse", step ? 0.6 : 0.8];   // ⑤ 病況惡化：心跳停止那一刻音樂切掉，只剩監視器警報
     case "cpr": return ["06_emergency"];                                     // ⑥ 急救高峰
-    case "family": return ["06_emergency", step >= 3 ? 0.5 : 1];             //    999 團隊到場後慢慢收掉
+    case "family": return ["06_emergency", step >= 4 ? 0.5 : 1];             //    999 團隊到場後慢慢收掉
     case "debrief": case "trm": case "isbar": case "points": return ["07_review"];         // ⑦-a Debrief、回顧
     case "credits": return ["08_credits", 1, true];                          // ⑦-b 片尾（每次進來從頭播）
     default: return ["02_flow"];                                             // ② 當天流程（第 2–7 頁）
@@ -563,7 +564,10 @@ addEventListener("keydown", (e) => {
   else if (e.key === "f" || e.key === "F") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
   else if (e.key === "Home") { si = 0; step = 0; render(null, false); }
   else if (e.key === "p" || e.key === "P") setLite(!W.isLite(), true);
+  else if (e.key === "o" || e.key === "O") { propsOn = !propsOn; W.showProps(propsOn); say(propsOn ? "考場儀器：新版（Blender）" : "考場儀器：舊版（修改前）"); }   // 比較儀器新舊
+  else if (e.key === "l" || e.key === "L") { looksOn = !looksOn; W.setLooks(looksOn); say(looksOn ? "光影升級：開" : "光影升級：關（修改前）"); }   // 比較光影升級前後
 });
+let looksOn = true, propsOn = true;
 addEventListener("click", (e) => {
   if (loading) { if (loading === "ready") dismissLoader(); return; }
   if (!X.active && !e.target.closest("button,a")) go(1);

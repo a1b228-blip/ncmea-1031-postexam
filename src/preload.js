@@ -3,7 +3,7 @@
 // - 聲音、影片：整個檔案抓進記憶體（blob），再換給已經建立的 <audio>／<video>（bindSrc）
 // 有檔案載入失敗也不會卡住：標註失敗數量，仍然可以開始。
 import LIST from "./preload-list.json";
-import { loadPerson } from "./people.js";
+import { loadPerson, loadModel } from "./people.js";
 
 const blobs = new Map(), bound = new Map();
 // 簡報裡的 <audio>／<video> 用這個設定來源：先用原本路徑，預先載入完成後自動換成記憶體裡的版本
@@ -46,8 +46,10 @@ export function preloadAll(onProgress) {
   const jobs = LIST.map(([path, size]) => {
     got.set(path, 0);
     const people = path.match(/^assets\/people\/(.+)\.glb$/);
+    const prop = /^assets\/props\/.+\.glb$/.test(path);
     const job = people
       ? loadPerson(people[1], (e) => { got.set(path, Math.min(size, e.loaded)); report(); })
+      : prop ? loadModel(path, (e) => { got.set(path, Math.min(size, e.loaded)); report(); })
       : fetchBlob(path, (n) => { got.set(path, Math.min(size, got.get(path) + n)); report(); }, () => got.set(path, 0)).then((url) => swap(path, url));
     return job.then(() => finish(path, size), (err) => { console.warn("預先載入失敗：", path, err); failed++; finish(path, size); });
   });

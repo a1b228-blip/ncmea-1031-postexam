@@ -10,6 +10,8 @@ cp index.html deck.css serve.py "$OUT/"
 cp dist/deck.js "$OUT/dist/"
 cp assets/console-screen.png "$OUT/assets/"
 cp assets/people/*.glb "$OUT/assets/people/"
+if [ -d assets/people/expr ]; then mkdir -p "$OUT/assets/people/expr"; cp assets/people/expr/*.glb "$OUT/assets/people/expr/"; fi   # 動態表情
+if [ -d assets/props ]; then mkdir -p "$OUT/assets/props"; cp assets/props/*.glb "$OUT/assets/props/"; fi   # Blender 重做的考場儀器
 cp assets/music/*.mp3 "$OUT/assets/music/"
 cp assets/voice/*.mp3 "$OUT/assets/voice/"
 cp assets/brief/*.jpg assets/brief/*.mp4 "$OUT/assets/brief/"

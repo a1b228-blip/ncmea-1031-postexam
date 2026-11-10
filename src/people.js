@@ -36,6 +36,12 @@ function fixMaterials(gltf) {
 }
 const load = (id, onProgress, tries = 3) => load1(id, onProgress).catch((e) => (tries > 1 ? new Promise((r) => setTimeout(r, 800)).then(() => load(id, onProgress, tries - 1)) : Promise.reject(e)));
 export const loadPerson = load;
+// 一般 3D 模型（Blender 做的考場儀器 assets/props/*.glb）：同一個檔只下載一次，失敗自動重試
+const modelCache = new Map();
+export function loadModel(url, onProgress, tries = 3) {
+  if (!modelCache.has(url)) modelCache.set(url, loader.loadAsync(url, onProgress).catch((e) => { modelCache.delete(url); throw e; }));
+  return modelCache.get(url).catch((e) => (tries > 1 ? new Promise((r) => setTimeout(r, 800)).then(() => loadModel(url, onProgress, tries - 1)) : Promise.reject(e)));
+}
 export const PEOPLE_INFO = {
   dingchen: { name: "鼎晨", h: 1.75 }, xiaohua: { name: "曉鏵", h: 1.6 }, ruiyi: { name: "瑞益", h: 1.72 }, yunding: { name: "云玎", h: 1.55 },
   son: { name: "兒子", h: 1.8 }, xiudi: { name: "秀蒂", h: 1.55 },
@@ -58,6 +64,40 @@ function nameTag(text) {
   return s;
 }
 
+// ---------- 動態表情（2026-11-10）----------
+// assets/people/expr/<id>-<表情>.glb：Blender 輸出的「只有臉」版本（make_people.py EXPR=1），跟一般模型相減 → 臉部變形（morph），
+// 表情之間以每秒約 4 的速度慢慢變過去。同一個人的所有分身共用同一份變形資料。
+export const EXPR_SET = { son: ["worried", "panic", "shout", "smile"], dingchen: ["concern", "focus", "smile"], ruiyi: ["focus", "smile"],
+  yunding: ["focus", "smile"], xiaohua: ["focus", "smile"], examiner: ["serious"], examiner2: ["serious"], examiner3: ["serious"], examiner4: ["serious"] };
+const EXPR_DEFAULT = { examiner: "serious", examiner2: "serious", examiner3: "serious", examiner4: "serious" };   // 考官一整場都嚴肅
+const exprCache = new Map();
+function loadExpr(id) {
+  if (!EXPR_SET[id]) return null;
+  if (!exprCache.has(id)) exprCache.set(id, Promise.all([load(id), ...EXPR_SET[id].map((n) => load(`expr/${id}-${n}`))]).then(([base, ...vars]) => {
+    const meshes = {};
+    base.scene.traverse((o) => { if (o.isMesh) meshes[o.name] = o; });
+    const n = vars.length;
+    for (const b of Object.values(meshes)) {
+      const bp = b.geometry.attributes.position;
+      const slots = vars.map(() => null);
+      vars.forEach((v, k) => v.scene.traverse((o) => {
+        if (!o.isMesh || o.name !== b.name) return;
+        const vp = o.geometry.attributes.position;
+        if (vp.count !== bp.count) { console.warn("表情頂點數不同，略過", id, b.name); return; }
+        const d = new Float32Array(bp.count * 3);
+        for (let i = 0; i < bp.count; i++) { d[i * 3] = vp.getX(i) - bp.getX(i); d[i * 3 + 1] = vp.getY(i) - bp.getY(i); d[i * 3 + 2] = vp.getZ(i) - bp.getZ(i); }
+        slots[k] = new THREE.Float32BufferAttribute(d, 3);
+      }));
+      if (!slots.some(Boolean)) continue;
+      b.geometry.morphAttributes.position = slots.map((a) => a || new THREE.Float32BufferAttribute(new Float32Array(bp.count * 3), 3));
+      b.geometry.morphTargetsRelative = true;
+    }
+    return { names: EXPR_SET[id], n };
+  }).catch((e) => { console.warn("表情載入失敗：", id, e); return null; }));
+  return exprCache.get(id);
+}
+export const setExpr = (g, name) => { const P = g?.userData?.person; if (P) P.expr = name || null; };
+
 export function makePerson(id, { label = true, tint = null } = {}) {
   const g = new THREE.Group();
   const info = PEOPLE_INFO[id] || { h: 1.7 };
@@ -73,6 +113,12 @@ export function makePerson(id, { label = true, tint = null } = {}) {
       if (tint && o.material?.name?.toLowerCase().includes("cloth")) { o.material = o.material.clone(); o.material.color.multiply(new THREE.Color(tint)); }
     });
     g.add(m); P.model = m;
+    P.expr ??= EXPR_DEFAULT[id] || null;
+    loadExpr(id)?.then((info) => {
+      if (!info) return;
+      const ms = []; m.traverse((o) => { if (o.isMesh && o.geometry.morphAttributes.position) { o.updateMorphTargets(); ms.push(o); } });
+      P.exprNames = info.names; P.exprMeshes = ms; P.exprW = info.names.map(() => 0);
+    });
     // 骨頭：記下靜止姿勢，並算出「模型座標的轉軸」換到每根骨頭父層座標的方法
     m.updateMatrixWorld(true);
     const qRootInv = m.getWorldQuaternion(new THREE.Quaternion()).invert();
@@ -104,33 +150,58 @@ function rotate(P, name, rots) {
   }
 }
 const TUNE = {}; if (typeof window !== "undefined") window.__poseTune = TUNE;
+// 拍肩姿勢（數值用骨頭位置算到雙手落在安妮兩肩）
+const TAP = { L: { up: -0.337, out: -0.369, tw: 0.4, el: -1.457 }, R: { up: -1.7, out: 0.053, tw: 0.419, el: 0.05 }, spine: 0.9, neck: [0.3, 0.45] };
+if (typeof window !== "undefined") window.__tap = TAP;
+// 搬背板＋BVM：右手垂下抓背板上緣（背板夾在右側）、左手在胸前拿 BVM
+const CARRY = { R: { up: 0.05, out: 0.22, el: -0.1 }, L: { up: -0.7, out: 0.1, tw: 0.3, el: -1.3 } };
+if (typeof window !== "undefined") window.__carry = CARRY;
+const O2R = { up: -1.167, out: 0.389, tw: 0.3, el: -1.31 };   // 轉氧氣流量旋鈕的右手（數值用骨頭位置算出來）
+if (typeof window !== "undefined") window.__o2r = O2R;
+// 推急救車（右手扶車）、貼電擊貼片（雙手各按一片）：數值用骨頭位置算出來
+const GUIDE = { up: 0.041, out: -0.066, tw: 0.075, el: -1.575 };
+const PADS = { L: { up: -0.916, out: -0.026, tw: 0, el: -0.576 }, R: { up: -0.993, out: -0.314, tw: 0, el: -0.532 }, spine: 0.55 };
+if (typeof window !== "undefined") { window.__guide = GUIDE; window.__pads = PADS; }
 // 姿勢表：手臂往前抬＝繞 X 負角度；往外張＝左手繞 Z 正角度、右手繞 Z 負角度；手肘彎＝繞 X 負角度；彎腰＝繞 X 正角度
 function arms(P, t) {
   const s = Math.sin, w = P.walkAmp;
   const swing = s(P.phase) * 0.38 * w;
-  let L = { up: swing, out: 0.06, el: -0.15 }, R = { up: -swing, out: 0.06, el: -0.15 }, spine = 0;
+  let L = { up: swing, out: 0.06, el: -0.15 }, R = { up: -swing, out: 0.06, el: -0.15 }, spine = 0, neck = [0, 0];   // neck＝[低頭, 轉頭（正＝往左）]
   if (w < 0.5) {
     switch (P.pose) {
       case "phone": R = { up: -1.2, out: 0.37, tw: 0.98, el: -2.33 }; break;            // 手機貼右耳、手肘在側邊（數值用骨頭位置算出來）
-      case "cpr": L = { up: -1.15, out: -0.18, el: 0 }; R = { up: -1.15, out: -0.18, el: 0 }; spine = 0.42; break;
+      case "cpr": L = { up: -1.206, out: -0.67, tw: 0.3, el: 0 }; R = { up: -1.143, out: -0.691, tw: 0.3, el: -0.073 }; spine = 0.6 + (P.cprK || 0) * 0.05; break;   // 雙手交疊在胸骨下半段、手臂打直（數值用骨頭位置算出來）；cprK＝壓下的程度
       case "bvm": L = { up: -0.95, out: -0.05, el: -0.75 }; R = { up: -0.95, out: -0.05, el: -0.75 }; spine = 0.25; break;
       case "calm": L = { up: -0.55, out: 0.1, el: -0.55 + s(t * 3) * 0.12 }; R = { up: -0.55, out: 0.1, el: -0.55 - s(t * 3) * 0.12 }; break;
       case "teach": R = { up: -0.95 + s(t * 2.2) * 0.1, out: 0.12, tw: 0.35, el: -0.85 + s(t * 3) * 0.15 }; L = { up: -0.5, out: 0.05, tw: 0.25, el: -1.2 + s(t * 2.6) * 0.1 }; break;   // 雙手在胸前比劃說明
       case "angry": L = { up: -1.9 + s(t * 7) * 0.5, out: 0.35, el: -0.9 }; R = { up: -1.9 - s(t * 7) * 0.5, out: 0.35, el: -0.9 }; spine = 0.08; break;
       case "sit": L = { up: -0.45, out: 0.05, el: -1.0 }; R = { up: -0.45, out: 0.05, el: -1.0 }; break;
       case "score": L = { up: -0.16, out: -0.2, tw: 0.55, el: -0.6, ey: -0.42 }; R = { up: -0.3 + s(t * 1.3) * 0.03, out: -0.25, tw: 0.4, el: -0.5 + s(t * 7) * 0.05, ey: -0.07 }; break;   // 考官：左手托評分夾板（腰前）、右手寫字（數值用骨頭位置算出來）
+      case "film": R = { up: -1.35, out: 0.05, tw: 0.2, el: -0.55 }; L = { up: -0.2, out: 0.1, el: -0.3 }; break;   // 兒子舉手機偷拍
+      case "stop": R = { up: -1.5, out: 0.2, el: -0.1 }; L = { up: -0.35, out: 0.1, el: -0.4 }; break;             // 伸手制止
       case "hold": L = { up: -0.16, out: -0.2, tw: 0.55, el: -0.6, ey: -0.42 }; R = { up: -0.3, out: -0.25, tw: 0.4, el: -0.5, ey: -0.07 }; break;                                     // 拿著單子看（同意書）
+      case "tap": case "lean": {                       // 叫：彎腰雙手放在病人兩肩（tap＝拍打、lean＝停在肩上探頭查看）
+        const k = P.pose === "tap" ? Math.max(0, s(t * 12)) * 0.16 : 0;
+        L = { ...TAP.L, el: TAP.L.el + k, up: TAP.L.up - k * 0.5 }; R = { ...TAP.R, el: TAP.R.el + k, up: TAP.R.up - k * 0.5 }; spine = TAP.spine; neck = TAP.neck; break;
+      }
+      case "reach": L = { up: -0.75, out: 0.12, el: -0.35 }; R = { up: -0.75, out: 0.12, el: -0.35 }; spine = 0.75; break;   // 彎腰從急救車拿東西
+      case "o2": L = { ...CARRY.L }; R = { ...O2R }; spine = 0.08; break;   // 左手拿 BVM、右手轉氧氣流量旋鈕（背板夾在右腋下）
+      case "pads": L = { ...PADS.L }; R = { ...PADS.R }; spine = PADS.spine; neck = [0.35, 0]; break;   // 彎腰把兩片電擊貼片貼到胸口
+      case "nod": L = { up: -0.05, out: 0.08, el: -0.3 }; R = { up: -0.05, out: 0.08, el: -0.3 }; neck = [0.1 + Math.max(0, s(t * 5)) * 0.16, 0]; break;   // 聽交班：邊聽邊點頭
       case "sitTalk": L = { up: -0.45, out: 0.05, el: -1.0 }; R = { up: -0.8 + s(t * 2.6) * 0.18, out: 0.18, el: -1.15 + s(t * 3.3) * 0.25 }; spine = 0.06; break;
     }
   }
   if (P.pose === "wand") R = { up: -0.95, out: 0.08, el: -0.35 };     // 右手拿探測棒往前伸（走路時也保持）
+  if (P.pose === "carry") { R = { ...CARRY.R }; L = { ...CARRY.L }; }   // 右手夾背板、左手拿 BVM（走路時也保持）
+  if (P.pose === "guide") R = { ...GUIDE };                               // 右手扶著急救車上緣、車在右側一起走（走路時也保持）
   const tune = w < 0.5 && TUNE[P.pose];                                 // 除錯用：window.__poseTune 即時調整角度
-  if (tune) { if (tune.L) L = { ...L, ...tune.L }; if (tune.R) R = { ...R, ...tune.R }; if (tune.spine != null) spine = tune.spine; }
+  if (tune) { if (tune.L) L = { ...L, ...tune.L }; if (tune.R) R = { ...R, ...tune.R }; if (tune.spine != null) spine = tune.spine; if (tune.neck) neck = tune.neck; }
+  if (P.headYaw) neck = [neck[0], neck[1] + P.headYaw];                // 轉頭說話（例如邊壓胸邊轉頭交班）；正＝往左
   // tw＝上臂往身體中線轉（水平方向），ey＝前臂往內轉（手往臉靠）；沒寫就是 0
   rotate(P, "upperarm_l", [[X, L.up], [Z, L.out], [Y, -(L.tw || 0)]]); rotate(P, "upperarm_r", [[X, R.up], [Z, -R.out], [Y, R.tw || 0]]);
   rotate(P, "lowerarm_l", [[X, L.el], [Y, -(L.ey || 0)]]); rotate(P, "lowerarm_r", [[X, R.el], [Y, R.ey || 0]]);
   const bow = P.bow * 1.05;
-  rotate(P, "spine_01", [[X, spine * 0.5 + bow * 0.45]]); rotate(P, "spine_02", [[X, spine * 0.5 + bow * 0.35]]); rotate(P, "neck_01", [[X, bow * 0.2]]);
+  rotate(P, "spine_01", [[X, spine * 0.5 + bow * 0.45]]); rotate(P, "spine_02", [[X, spine * 0.5 + bow * 0.35]]); rotate(P, "neck_01", [[X, bow * 0.2 + neck[0]], [Y, neck[1]]]);
 }
 function legs(P) {
   if (P.pose === "sit" || P.pose === "sitTalk") {
@@ -158,6 +229,10 @@ export function updatePeople(dt, t) {
     if (moving) P.phase += d * 0.42;
     else P.phase += (Math.round(P.phase / Math.PI) * Math.PI - P.phase) * Math.min(1, dt * 6);   // 停下來時把腳收回
     arms(P, t); legs(P);
+    if (P.exprMeshes) {                                  // 表情：每個表情的權重慢慢靠近目標（約 0.5 秒變完）
+      const k = Math.min(1, dt * 4);
+      P.exprNames.forEach((nm, i) => { const w = (P.exprW[i] += ((nm === P.expr ? 1 : 0) - P.exprW[i]) * k); for (const o of P.exprMeshes) o.morphTargetInfluences[i] = w; });
+    }
     if (P.tag) placeTag(P);
     phoneProp(P);
     sheetProp(P);
@@ -168,7 +243,7 @@ const PHONE = { size: [0.075, 0.15, 0.012], at: [0, 0.09, 0.03], rot: [0, 0, 0] 
 if (typeof window !== "undefined") window.__phone = PHONE;   // 除錯用：即時調整位置
 let phoneGeo = null, phoneMat = null, screenMat = null;
 function phoneProp(P) {
-  const on = P.pose === "phone" && P.walkAmp < 0.5;
+  const on = (P.pose === "phone" || P.pose === "film") && P.walkAmp < 0.5;   // 打電話、偷拍都拿手機
   if (!on && !P.phone) return;
   if (!P.phone) {
     const hand = P.bones.hand_r?.b; if (!hand) return;

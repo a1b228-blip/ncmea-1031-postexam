@@ -130,7 +130,7 @@ def children(obj):
             p = p.parent
     return out
 
-def build(p, x):
+def build(p, x, extra=None):
     info = HumanService._create_default_human_info_dict()
     info["name"] = p["id"]
     info["phenotype"].update(gender=p["gender"], age=p["age"], weight=p["weight"], muscle=0.5, height=0.5,
@@ -140,6 +140,7 @@ def build(p, x):
     face = None if NOFACE else FACE.get(p["id"])
     info["eyebrows"] = find("eyebrows", face["brow"] if face else "eyebrow001"); info["eyelashes"] = find("eyelashes", "eyelashes01")
     if face: info["targets"] = face_targets(face["t"], face.get("k"))
+    if extra: info["targets"] = info.get("targets", []) + [{"target": k, "value": v} for k, v in extra.items()]   # 表情單元（臉部動作）
     info["hair"] = find("hair", p["hair"])
     info["teeth"] = ""; info["tongue"] = ""
     info["skin_mhmat"] = find_skin(p["skin"]); info["skin_material_type"] = "MAKESKIN"
@@ -201,6 +202,51 @@ def build(p, x):
     root.scale = (root.scale[0] * k,) * 3
     root.location.x = x
     return root, body
+
+# ---- 表情（EXPR=1）：每人每種表情各輸出一個「只有臉」的小檔（body＋眉毛＋睫毛＋骨架，沒有材質貼圖），
+#      簡報裡拿來跟一般模型相減，變成可以 0～1 慢慢變化的臉部變形；另外拍大頭照給使用者確認 ----
+# 表情單元（MakeHuman expression units，0～1）
+EXPRS = {
+    "worried": {"eyebrows-left-inner-up": 1.0, "eyebrows-right-inner-up": 1.0, "mouth-depression": .5, "mouth-compression": .3},          # 焦慮、擔心
+    "panic":   {"eyebrows-left-up": .6, "eyebrows-right-up": .6, "eyebrows-left-inner-up": .6, "eyebrows-right-inner-up": .6,
+                "eye-left-opened-up": .55, "eye-right-opened-up": .55, "mouth-open": .35},                                                    # 慌張
+    "shout":   {"eyebrows-left-down": .85, "eyebrows-right-down": .85, "eye-left-slit": .3, "eye-right-slit": .3, "mouth-open": .75,
+                "mouth-retraction": .4, "nose-left-dilatation": .4, "nose-right-dilatation": .4},                                            # 生氣大吼
+    "concern": {"eyebrows-left-inner-up": .75, "eyebrows-right-inner-up": .75, "mouth-compression": .3},                                       # 安撫時擔心
+    "focus":   {"eyebrows-left-down": .35, "eyebrows-right-down": .35, "eye-left-slit": .2, "eye-right-slit": .2, "mouth-compression": .45},  # 急救專注、咬緊牙
+    "smile":   {"mouth-corner-puller": .7, "mouth-upward-retraction": .2, "eye-left-slit": .15, "eye-right-slit": .15},                      # 謝幕微笑
+    "serious": {"eyebrows-left-down": .2, "eyebrows-right-down": .2, "mouth-depression": .25},                                               # 考官嚴肅
+}
+EXPR_SET = {"son": ["worried", "panic", "shout", "smile"], "dingchen": ["concern", "focus", "smile"], "ruiyi": ["focus", "smile"],
+            "yunding": ["focus", "smile"], "xiaohua": ["focus", "smile"],
+            "examiner": ["serious"], "examiner2": ["serious"], "examiner3": ["serious"], "examiner4": ["serious"]}
+if os.environ.get("EXPR"):
+    os.makedirs(os.path.join(OUT, "expr"), exist_ok=True); os.makedirs(os.path.join(OUT, "heads"), exist_ok=True)
+    bpy.ops.object.light_add(type="AREA", location=(0, -3, 3)); bpy.context.object.data.energy = 300; bpy.context.object.data.size = 4
+    bpy.ops.object.light_add(type="AREA", location=(-2, -2, 1.8)); bpy.context.object.data.energy = 120; bpy.context.object.data.size = 3
+    w = bpy.context.scene.world or bpy.data.worlds.new("w"); bpy.context.scene.world = w; w.use_nodes = True
+    w.node_tree.nodes["Background"].inputs[0].default_value = (0.82, 0.85, 0.9, 1); w.node_tree.nodes["Background"].inputs[1].default_value = 0.6
+    sc = bpy.context.scene; sc.render.engine = "BLENDER_EEVEE_NEXT"; sc.render.resolution_x = 420; sc.render.resolution_y = 500
+    bpy.ops.object.camera_add(); cam = bpy.context.object; cam.data.lens = 85; sc.camera = cam
+    everyone = {q["id"]: q for q in PEOPLE + EXTRA}
+    for pid, names in EXPR_SET.items():
+        if ONLY and pid not in ONLY.split(","): continue
+        for name in [None] + names:                     # None＝一般表情（大頭照對照用，不輸出檔案）
+            p = everyone[pid]
+            root, body = build(p, 0, EXPRS.get(name))
+            bpy.context.view_layer.update()
+            if name:
+                bpy.ops.object.select_all(action="DESELECT"); root.select_set(True)
+                for o in children(root):
+                    if o.type == "MESH" and any(k in o.name.lower() for k in ("body", "eyebrow", "eyelash")): o.select_set(True)
+                bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "expr", f"{pid}-{name}.glb"), use_selection=True, export_format="GLB",
+                                          export_materials="NONE", export_apply=True, export_animations=False, export_yup=True)
+            hz = p["height"] / 100 * 0.925
+            cam.location = (0, -1.25, hz); cam.rotation_euler = (math.radians(90), 0, 0)
+            sc.render.filepath = os.path.join(OUT, "heads", f"{pid}-{name or 'neutral'}.png"); bpy.ops.render.render(write_still=True)
+            for o in [root] + children(root): bpy.data.objects.remove(o, do_unlink=True)
+            print("EXPR", pid, name, flush=True)
+    print("DONE", flush=True); sys.exit(0)
 
 made = []
 for i, p in enumerate(PEOPLE):

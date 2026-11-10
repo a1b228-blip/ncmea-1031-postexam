@@ -159,11 +159,11 @@ h2.small { font-size: 38px; top: 84px; }
 
 /* 14 家屬大鬧：兒子衝到 MRI 等候區後（第 3 步起）只留 MRI 單一畫面，收掉 CT 那一側 */
 .slide[data-id="family"] .dual-line, .slide[data-id="family"] .cam-tag, .slide[data-id="family"] .dual-list { transition: opacity .6s, left .8s ease; }
-.slide[data-id="family"][data-step="2"] .dual-line, .slide[data-id="family"][data-step="3"] .dual-line, .slide[data-id="family"][data-step="4"] .dual-line,
-.slide[data-id="family"][data-step="2"] .cam-tag.l, .slide[data-id="family"][data-step="3"] .cam-tag.l, .slide[data-id="family"][data-step="4"] .cam-tag.l,
-.slide[data-id="family"][data-step="2"] .dual-list.l, .slide[data-id="family"][data-step="3"] .dual-list.l, .slide[data-id="family"][data-step="4"] .dual-list.l { opacity: 0; pointer-events: none; }
-.slide[data-id="family"][data-step="2"] .cam-tag.r, .slide[data-id="family"][data-step="3"] .cam-tag.r, .slide[data-id="family"][data-step="4"] .cam-tag.r { left: 40px; }
-.slide[data-id="family"][data-step="2"] .dual-list.r, .slide[data-id="family"][data-step="3"] .dual-list.r, .slide[data-id="family"][data-step="4"] .dual-list.r { left: 40px; }
+.slide[data-id="family"][data-step="2"] .dual-line, .slide[data-id="family"][data-step="3"] .dual-line, .slide[data-id="family"][data-step="4"] .dual-line, .slide[data-id="family"][data-step="5"] .dual-line,
+.slide[data-id="family"][data-step="2"] .cam-tag.l, .slide[data-id="family"][data-step="3"] .cam-tag.l, .slide[data-id="family"][data-step="4"] .cam-tag.l, .slide[data-id="family"][data-step="5"] .cam-tag.l,
+.slide[data-id="family"][data-step="2"] .dual-list.l, .slide[data-id="family"][data-step="3"] .dual-list.l, .slide[data-id="family"][data-step="4"] .dual-list.l, .slide[data-id="family"][data-step="5"] .dual-list.l { opacity: 0; pointer-events: none; }
+.slide[data-id="family"][data-step="2"] .cam-tag.r, .slide[data-id="family"][data-step="3"] .cam-tag.r, .slide[data-id="family"][data-step="4"] .cam-tag.r, .slide[data-id="family"][data-step="5"] .cam-tag.r { left: 40px; }
+.slide[data-id="family"][data-step="2"] .dual-list.r, .slide[data-id="family"][data-step="3"] .dual-list.r, .slide[data-id="family"][data-step="4"] .dual-list.r, .slide[data-id="family"][data-step="5"] .dual-list.r { left: 40px; }
 
 /* Debrief：左邊流程清單（ERCP、考官問題），右上大字倒數 */
 .db-list { position: absolute; left: 70px; top: 182px; width: 680px; list-style: none; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; counter-reset: n; }

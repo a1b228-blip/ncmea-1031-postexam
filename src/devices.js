@@ -200,7 +200,7 @@ export function patientMonitor({ own = false } = {}) {
   const head = new THREE.Group(); head.position.set(0, 76, -4); head.rotation.x = -0.12; g.add(head);
   head.add(rbox(28, 21, 7, 2, white));
   head.add(at(rbox(26, 18.5, 0.6, 0.5, dark), 0, 0, -3.4));
-  const scr = screen(own ? pmA : pm, 23.4, 16.1); scr.position.set(0.2, 0.2, -3.75); head.add(scr);
+  const scr = screen(own ? pmA : pm, 23.4, 16.1); scr.position.set(0.2, 0.2, -3.75); head.add(scr); g.userData.screen = scr;   // 換 Blender 版本時保留這片會動的螢幕
   const handle = new THREE.Mesh(new THREE.TorusGeometry(6, 0.9, 10, 24, Math.PI), white); handle.position.set(0, 10.5, 0); head.add(handle);
   const knob = cylM(1.4, 1.4, 1.2, M(0x334155)); knob.rotation.x = Math.PI / 2; knob.position.set(12, -8.2, -3.8); head.add(knob);
   head.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: 0x22c55e })), 12, 8.6, -3.8));
@@ -233,7 +233,7 @@ export function contrastInjector() {
   head.add(rbox(14, 9, 16, 2.4, white));
   head.add(at(rbox(8, 0.6, 10, 0.3, M(0x0b1220)), 2, 4.6, 0));
   const disp = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 4.6), new THREE.MeshBasicMaterial({ map: inj.t, toneMapped: false }));
-  disp.rotation.x = -Math.PI / 2; disp.rotation.z = -Math.PI / 2; disp.position.set(2, 4.95, 0); head.add(disp);
+  disp.rotation.x = -Math.PI / 2; disp.rotation.z = -Math.PI / 2; disp.position.set(2, 4.95, 0); head.add(disp); g.userData.screen = disp;   // 換 Blender 版本時保留這片螢幕
   const glass = new THREE.MeshStandardMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0, depthWrite: false });
   for (const [z, fluid] of [[-4, 0xf59e0b], [4, 0x38bdf8]]) {
     const s = cylM(2.6, 2.6, 16, glass, 24); s.rotation.z = Math.PI / 2; s.position.set(-15, 0, z); head.add(s);
@@ -388,9 +388,9 @@ export function anne() {
   ell(1.4, 1, 0.7, 1.3, skin, -32, 7.1, 0);                                                                          // 下巴
   add(at(rz(cylM(2.5, 2.7, 5, skin)), -30, 3.2, 0));                                                                 // 頸
   // 胸口（CPR 按壓處）：塑膠皮膚＋乳頭、胸骨凹痕；外套從兩側敞開
-  add(at(rbox(24, 7, 16, 3, skin), -16, 3.8, 0));
-  for (const z of [-3.6, 3.6]) ell(0.45, 1, 0.3, 1, M(0xc9967e, { roughness: 0.5 }), -14, 7.3, z);
-  add(at(new THREE.Mesh(new THREE.BoxGeometry(5, 0.15, 0.5), M(0xdcb79b, { roughness: 0.5 })), -21, 7.32, 0));
+  const chestParts = [add(at(rbox(24, 7, 16, 3, skin), -16, 3.8, 0))];               // 壓胸時這些會跟著下陷（見最後的 chest 群組）
+  for (const z of [-3.6, 3.6]) chestParts.push(ell(0.45, 1, 0.3, 1, M(0xc9967e, { roughness: 0.5 }), -14, 7.3, z));
+  chestParts.push(add(at(new THREE.Mesh(new THREE.BoxGeometry(5, 0.15, 0.5), M(0xdcb79b, { roughness: 0.5 })), -21, 7.32, 0)));
   for (const s of [-1, 1]) {
     add(at(rbox(25, 7.6, 3.2, 1.4, suit), -15.5, 3.8, s * 7.4));                       // 外套前襟（兩側）
     add(at(new THREE.Mesh(new THREE.BoxGeometry(25, 0.5, 0.35), stripe), -15.5, 7.45, s * 5.9));   // 拉鍊邊條
@@ -416,10 +416,15 @@ export function anne() {
   // 已接好生理監視器：胸前 4 片 EKG 電極、手指血氧夾、上臂血壓袖帶
   for (const [x, z, c] of ANNE_LEADS.ecg) {
     const pad = cylM(1.5, 1.5, 0.3, M(0xf8fafc), 16); pad.position.set(x, 7.45, z); g.add(pad);
-    g.add(at(cylM(0.55, 0.55, 0.8, M(c), 10), x, 7.9, z));
+    const clip = at(cylM(0.55, 0.55, 0.8, M(c), 10), x, 7.9, z); g.add(clip);
+    chestParts.push(pad, clip);
   }
   g.add(at(rbox(2.6, 2, 2.2, 0.8, M(0x2563eb)), ...ANNE_LEADS.spo2));                    // 血氧夾（右手指）
   const cuff = cylM(2.8, 2.8, 6, M(0x475569, { roughness: 0.8 }), 18); cuff.rotation.z = Math.PI / 2; cuff.position.set(...ANNE_LEADS.cuff); g.add(cuff); // 血壓袖帶（左上臂）
+  // 胸口群組：以胸口底部（高 0.3）為軸，壓胸時 scale.y 變小＝胸口往下陷（world.js compress）
+  const chest = new THREE.Group(); chest.position.set(-16, 0.3, 0); g.add(chest); g.updateMatrixWorld(true);
+  for (const m of chestParts) chest.attach(m);
+  g.userData.chest = chest;
   return shade(g);
 }
 // 抗磁推床（MRI 專用、可進磁體室），床上躺安妮；長軸沿 x
