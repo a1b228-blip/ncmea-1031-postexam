@@ -128,36 +128,44 @@
   709820
  ],
  [
+  "assets/props/anne_body.glb",
+  890772
+ ],
+ [
+  "assets/props/anne_chest.glb",
+  107252
+ ],
+ [
   "assets/props/contrast_injector.glb",
-  263572
+  511292
  ],
  [
   "assets/props/crash_cart.glb",
-  350016
+  850084
  ],
  [
   "assets/props/ct_scanner.glb",
-  284460
+  757016
  ],
  [
   "assets/props/mr_stretcher.glb",
-  405740
+  737012
  ],
  [
   "assets/props/mri_scanner.glb",
-  365088
+  1064560
  ],
  [
   "assets/props/oxygen_cylinder.glb",
-  217308
+  344284
  ],
  [
   "assets/props/patient_monitor.glb",
-  305164
+  605396
  ],
  [
   "assets/props/wheelchair.glb",
-  384688
+  683832
  ],
  [
   "assets/music/01_opening.mp3",

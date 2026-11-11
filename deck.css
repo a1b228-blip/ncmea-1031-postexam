@@ -10,8 +10,14 @@ html, body { height: 100%; background: #000; color: var(--ink); font-family: var
 #stage { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); display: block; }
 #space { position: fixed !important; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; overflow: hidden; }
 .space-item { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-#shade { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; opacity: 0; transition: opacity .8s; background: linear-gradient(90deg, rgba(5,12,24,.92) 0%, rgba(5,12,24,.7) 32%, rgba(5,12,24,0) 58%); }
+#shade { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; opacity: 0; transition: opacity .8s; background: linear-gradient(90deg, rgba(5,12,24,.94) 0%, rgba(5,12,24,.86) 36%, rgba(5,12,24,.5) 56%, rgba(5,12,24,0) 72%); }
 body[data-slide="cover"] #shade { opacity: 1; }
+/* 封面主視覺（Blender 劇照）：封面時顯示並慢慢推近，離開封面淡出 */
+#hero { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 1.4s ease; }
+#hero img { width: 100%; height: 100%; object-fit: cover; transform-origin: 32% 50%; }   /* 推近時人物往右飄，離標題遠一點 */
+body[data-slide="cover"] #hero { opacity: 1; }
+body[data-slide="cover"] #hero img { animation: heroPush 40s cubic-bezier(.2,.6,.3,1) both; }
+@keyframes heroPush { from { transform: scale(1.0); } to { transform: scale(1.1); } }
 #flash { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; opacity: 0; background: #e0f2fe; z-index: 4; }
 .vignette { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(3, 8, 16, 0.75) 100%); }
 
@@ -58,7 +64,12 @@ h2 em { font-style: normal; color: var(--hl); }
 .kicker { font-size: 24px; letter-spacing: .14em; color: #bae6fd; font-weight: 800; }
 .cover-title h1 { margin-top: 22px; font-size: 118px; line-height: 1.1; font-weight: 900; letter-spacing: .02em; text-shadow: 0 8px 40px rgba(0,0,0,.6); }
 .cover-title h1 span { display: block; }
-.cover-title h1 .hl { color: var(--hl); }
+.cover-title h1 .hl, .ld-box h1 .hl { color: var(--hl); font-style: normal; }
+.cover-title h1 .sub { margin-top: 18px; font-size: 48px; white-space: nowrap; font-weight: 800; letter-spacing: .04em; line-height: 1.25; }
+.ld-box h1 .sub { margin-top: 1.4vh; font-size: clamp(22px, 3vw, 50px); font-weight: 800; letter-spacing: .04em; }
+.cover-title .speaker { margin-top: 40px; display: flex; align-items: baseline; gap: 18px; font-size: 28px; font-weight: 700; color: var(--muted); letter-spacing: .08em; }
+.cover-title .speaker::before { content: ""; width: 56px; height: 3px; background: var(--hl); align-self: center; border-radius: 2px; }
+.cover-title .speaker b { font-size: 36px; font-weight: 900; color: #fff; letter-spacing: .12em; }
 .cover-title .lead { margin-top: 26px; font-size: 30px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
 .start-hint { position: absolute; left: 0; right: 0; bottom: 70px; text-align: center; font-size: 20px; color: var(--dim); letter-spacing: .2em; }
 kbd { display: inline-block; padding: 1px 10px; border: 1px solid var(--dim); border-radius: 6px; font-family: inherit; margin: 0 4px; }
@@ -151,8 +162,8 @@ h2.small { font-size: 38px; top: 84px; }
 .slide.wide .dual-list.l { width: 600px; }
 .slide.wide .dual-list.r { left: 680px; width: 880px; }
 .dual-list.compact { gap: 4px; padding: 12px 16px; } .dual-list.compact li { font-size: 21px; } .dual-list.compact li::before { width: 28px; height: 28px; font-size: 16px; }
-.mon-win { position: absolute; right: 24px; top: 140px; width: 330px; padding: 10px; border-radius: 14px; background: rgba(8,18,34,.9); border: 1px solid rgba(239,68,68,.5); }
-.mw-head { font-size: 18px; font-weight: 800; margin-bottom: 6px; } .mw-head small { margin-left: 8px; font-size: 14px; color: var(--dim); font-weight: 600; }
+.mon-win { position: absolute; right: 16px; top: 112px; width: 250px; padding: 7px; border-radius: 12px; background: rgba(8,18,34,.9); border: 1px solid rgba(239,68,68,.5); }   /* 縮小、貼到右上角：少擋 MRI 畫面的動作 */
+.mw-head { font-size: 15px; font-weight: 800; margin-bottom: 4px; } .mw-head small { margin-left: 6px; font-size: 12px; color: var(--dim); font-weight: 600; }
 .mw-slot canvas { width: 100%; display: block; border-radius: 8px; }
 .bcast { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); padding: 8px 24px; border-radius: 12px; background: #dc2626; color: #fff; font-size: 26px; font-weight: 900; white-space: nowrap; box-shadow: 0 0 30px rgba(239,68,68,.6); display: none; animation: alertPulse 1s infinite; }
 .slide[data-id="cpr"][data-step="4"] .bcast, .slide[data-id="cpr"][data-step="5"] .bcast { display: block; }
@@ -231,6 +242,9 @@ h2.small { font-size: 38px; top: 84px; }
 .credits .cr-dim { position: absolute; left: -2000px; right: -2000px; top: -2000px; bottom: -2000px; background: #02060d; opacity: 0; }
 .credits .cr-bar { position: absolute; left: -2000px; right: -2000px; height: 2000px; background: #000; z-index: 2; }   /* 電影黑邊蓋在名單上面：名單捲進黑邊後就看不到 */
 .credits .cr-bar.top { bottom: 100%; } .credits .cr-bar.bot { top: 100%; }
+.credits .cr-stills { position: absolute; inset: 0; overflow: hidden; }
+.credits .cr-stills::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 18%, rgba(2,6,13,.62) 38%, rgba(2,6,13,.62) 62%, transparent 82%); }   /* 中間名單經過的那一條再壓暗 */
+.credits .cr-stills img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; filter: brightness(.5) saturate(.9); will-change: transform, opacity; }   /* 壓暗：名單字要看得清楚 */
 .credits .cr-roll { position: absolute; left: 0; right: 0; top: 0; text-align: center; will-change: transform; z-index: 1; }
 .cr-head { font-size: 64px; font-weight: 900; letter-spacing: .3em; color: var(--hl); text-shadow: 0 0 30px rgba(252,211,77,.35); }
 .cr-sub { margin-top: 18px; font-size: 26px; font-weight: 600; letter-spacing: .14em; color: var(--muted); }

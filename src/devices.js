@@ -413,6 +413,7 @@ export function anne() {
     ell(1.7, 1.45, 0.55, 1, skin, 1.2, 2.2, z);
     ell(0.5, 1.6, 0.6, 0.6, skin, 0.4, 2.6, z + Math.sign(z) * 1.5);                    // 大拇指
   }
+  const bodyParts = g.children.filter((o) => !chestParts.includes(o)), chestLook = [...chestParts];   // 換 Blender 版本時要藏起來的舊外觀（電極、血氧夾、袖帶不算）
   // 已接好生理監視器：胸前 4 片 EKG 電極、手指血氧夾、上臂血壓袖帶
   for (const [x, z, c] of ANNE_LEADS.ecg) {
     const pad = cylM(1.5, 1.5, 0.3, M(0xf8fafc), 16); pad.position.set(x, 7.45, z); g.add(pad);
@@ -424,7 +425,7 @@ export function anne() {
   // 胸口群組：以胸口底部（高 0.3）為軸，壓胸時 scale.y 變小＝胸口往下陷（world.js compress）
   const chest = new THREE.Group(); chest.position.set(-16, 0.3, 0); g.add(chest); g.updateMatrixWorld(true);
   for (const m of chestParts) chest.attach(m);
-  g.userData.chest = chest;
+  g.userData.chest = chest; g.userData.look = { body: bodyParts, chest: chestLook };
   return shade(g);
 }
 // 抗磁推床（MRI 專用、可進磁體室），床上躺安妮；長軸沿 x

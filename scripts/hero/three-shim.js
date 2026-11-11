@@ -1,0 +1,3 @@
+const T = window.__deck.W.THREE;
+export const { BufferAttribute, ClampToEdgeWrapping, Color, DoubleSide, InterpolateDiscrete, InterpolateLinear, NoColorSpace, LinearFilter, LinearMipmapLinearFilter, LinearMipmapNearestFilter, MathUtils, Matrix4, MirroredRepeatWrapping, NearestFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, PropertyBinding, RGBAFormat, RepeatWrapping, Scene, Source, SRGBColorSpace, CompressedTexture, Vector3, Quaternion, REVISION, PlaneGeometry, ShaderMaterial, Uniform, Mesh, PerspectiveCamera, WebGLRenderer, Texture, DataTexture, UnsignedByteType, LinearSRGBColorSpace } = T;
+export default T;

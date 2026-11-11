@@ -9,6 +9,7 @@ rm -rf "$OUT"; mkdir -p "$OUT/dist" "$OUT/assets/people" "$OUT/assets/music" "$O
 cp index.html deck.css serve.py "$OUT/"
 cp dist/deck.js "$OUT/dist/"
 cp assets/console-screen.png "$OUT/assets/"
+if [ -d assets/cover ]; then mkdir -p "$OUT/assets/cover"; cp assets/cover/*.jpg "$OUT/assets/cover/"; fi   # 封面主視覺（Blender 劇照）
 cp assets/people/*.glb "$OUT/assets/people/"
 if [ -d assets/people/expr ]; then mkdir -p "$OUT/assets/people/expr"; cp assets/people/expr/*.glb "$OUT/assets/people/expr/"; fi   # 動態表情
 if [ -d assets/props ]; then mkdir -p "$OUT/assets/props"; cp assets/props/*.glb "$OUT/assets/props/"; fi   # Blender 重做的考場儀器

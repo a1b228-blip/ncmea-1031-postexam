@@ -55,10 +55,35 @@ def boolean_diff(o, cutter):
     bpy.context.view_layer.objects.active = o; bpy.ops.object.modifier_apply(modifier="cut")
     bpy.data.objects.remove(cutter, do_unlink=True)
 
+BAKE = os.environ.get("BAKE_AO", "1") != "0"             # 烘焙角落陰影（AO）到頂點顏色；BAKE_AO=0 可以跳過（快速預覽）
+def bake_ao(objs=None, dist=6.0, lift=0.4, max_edge=2.5):
+    """用 Cycles 把環境光遮蔽（縫隙、凹處、接合處的暗部）烘焙到每個頂點的顏色；lift：最暗也保留幾成亮度（避免太黑）"""
+    sc = bpy.context.scene; sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = 32
+    sc.render.bake.target = "VERTEX_COLORS"
+    if not sc.world: sc.world = bpy.data.worlds.new("w")
+    sc.world.light_settings.distance = dist
+    meshes = objs or [o for o in sc.objects if o.type == "MESH"]
+    for o in meshes:                                      # 先套用修改器，再把太長的邊切細（頂點太少烘不出漸層）
+        bpy.ops.object.select_all(action="DESELECT"); o.select_set(True); bpy.context.view_layer.objects.active = o
+        for m in list(o.modifiers): bpy.ops.object.modifier_apply(modifier=m.name)
+        bm = bmesh.new(); bm.from_mesh(o.data)
+        for _ in range(3):
+            long = [e for e in bm.edges if e.calc_length() > max_edge]
+            if not long: break
+            bmesh.ops.subdivide_edges(bm, edges=long, cuts=1, use_grid_fill=True)
+        bm.to_mesh(o.data); bm.free()
+        ca = o.data.color_attributes.new("AO", "BYTE_COLOR", "POINT"); o.data.color_attributes.active_color = ca
+    for o in meshes:
+        bpy.ops.object.select_all(action="DESELECT"); o.select_set(True); bpy.context.view_layer.objects.active = o
+        bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
+        for d in o.data.color_attributes["AO"].data:
+            v = lift + (1 - lift) * d.color[0]; d.color = (v, v, v, 1.0)
+
 def export(name):
+    if BAKE: bake_ao()
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, f"{name}.glb"), use_selection=True, export_format="GLB",
-                              export_apply=True, export_yup=True, export_animations=False)
+                              export_apply=True, export_yup=True, export_animations=False, export_vertex_color="ACTIVE")
     print("EXPORTED", name, flush=True)
 
 # ------------------------------------------------------------------------------------------------
@@ -677,7 +702,174 @@ def wheelchair():
     cyl_between("cross_b", (9, 9, 0), (-9, 19.2, 6), 0.35, frame)
     export("wheelchair")
 
-PROPS = {"ct_scanner": ct_scanner, "mri_scanner": mri_scanner, "mr_stretcher": mr_stretcher, "crash_cart": crash_cart, "patient_monitor": patient_monitor, "contrast_injector": contrast_injector, "oxygen_cylinder": oxygen_cylinder, "wheelchair": wheelchair}
+# ------------------------------------------------------------------------------------------------
+# 安妮（CPR 訓練假人，一般外型、不放品牌）：取代 devices.js anne() 用方塊拼的外觀。座標＝anne() 的本地座標：
+#   長軸沿 x、頭在 -x（下巴朝 +x）、臉朝上（+y）；y＝0 是床面。胸口（x -28 ～ -4）另外輸出 anne_chest.glb，
+#   放進簡報裡會下陷的 chest 群組（壓胸時整段胸口往下陷）；其餘輸出 anne_body.glb。
+#   保留：胸口頂面高約 7.5（電極 7.45、電擊貼片 7.6）、手臂中心 z ±10、右手血氧夾 (1, 2.6, 10)、左上臂血壓袖帶 (-20, 2.4, -10)
+# ------------------------------------------------------------------------------------------------
+def loft(name, secs, m, n=36, cap0=True, cap1=True, ang=None, solid=0.0):
+    """secs：[(x, cy, cz, a, b)…] 沿 x 的橢圓截面（a＝z 方向半寬、b＝y 方向半高）；ang＝(起, 迄) 只做一段弧（開放曲面）"""
+    me = bpy.data.meshes.new(name); o = bpy.data.objects.new(name, me); bpy.context.scene.collection.objects.link(o)
+    bm = bmesh.new(); rings = []
+    full = ang is None
+    for (x, cy, cz, a, b) in secs:
+        ring = []
+        cnt = n if full else n + 1
+        for i in range(cnt):
+            t = (i / n) * math.tau if full else ang[0] + (ang[1] - ang[0]) * i / n
+            ring.append(bm.verts.new(P(x, cy + b * math.sin(t), cz + a * math.cos(t))))
+        rings.append(ring)
+    for r0, r1 in zip(rings, rings[1:]):
+        cnt = len(r0)
+        for i in range(cnt if full else cnt - 1):
+            j = (i + 1) % cnt
+            bm.faces.new([r0[i], r0[j], r1[j], r1[i]])
+    if full:
+        for ring, flip, on in ((rings[0], True, cap0), (rings[-1], False, cap1)):
+            if not on: continue
+            c = bm.verts.new(sum((v.co for v in ring), Vector()) / len(ring))
+            for i in range(len(ring)):
+                vs = [c, ring[(i + 1) % len(ring)], ring[i]] if flip else [c, ring[i], ring[(i + 1) % len(ring)]]
+                bm.faces.new(vs)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me); bm.free()
+    if solid:
+        s = o.modifiers.new("solid", "SOLIDIFY"); s.thickness = solid; s.offset = -1
+    return finish(o, m)
+
+def ell(name, c, r, m, seg=24, ring=14):
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=seg, ring_count=ring)
+    o = bpy.context.object; o.name = name; o.scale = (r[0], r[2], r[1]); o.location = P(*c)
+    bpy.ops.object.transform_apply(scale=True)
+    return finish(o, m)
+
+def tube_x(name, x0, x1, y, z, r, m, verts=12):
+    return cyl_between(name, (x0, y, z), (x1, y, z), r, m, verts=verts)
+
+def anne_model():
+    reset()
+    skin = mat("an_skin", (0.80, 0.58, 0.45), 0.45)
+    suit = mat("an_suit", (0.07, 0.22, 0.75), 0.75)
+    white = mat("an_white", (0.93, 0.94, 0.95), 0.6)
+    hair = mat("an_hair", (0.24, 0.15, 0.08), 0.6)
+    line = mat("an_line", (0.25, 0.16, 0.11), 0.6)
+    lip = mat("an_lip", (0.72, 0.42, 0.38), 0.45)
+    dark = mat("an_dark", (0.15, 0.06, 0.05), 0.7)
+    nip = mat("an_nip", (0.70, 0.47, 0.38), 0.5)
+    shoe = mat("an_shoe", (0.05, 0.06, 0.08), 0.5)
+    chest = []
+
+    # 軀幹（藍色運動外套）：頸根 → 肩 → 胸 → 腰 → 臀；胸口那一段放進 chest
+    T = {-29.5: (3.6, 8.6, 3.2), -28: (3.75, 9.6, 3.45), -26: (3.8, 10.1, 3.55), -20: (3.8, 9.3, 3.6), -12: (3.75, 8.8, 3.6),
+         -4: (3.6, 8.1, 3.4), 0: (3.5, 7.7, 3.2), 4: (3.4, 8.0, 3.15), 7: (3.3, 7.6, 3.0)}
+    sec = lambda xs: [(x, T[x][0], 0, T[x][1], T[x][2]) for x in xs]
+    loft("torso_upper", sec([-29.5, -28]), suit, cap1=False)
+    chest.append(loft("torso_chest", sec([-28, -26, -20, -12, -4]), suit, cap0=False, cap1=False))
+    loft("torso_lower", sec([-4, 0, 4, 7]), suit, cap0=False)
+    # 胸口皮膚（外套從胸前敞開）：比外套高一點點的一段弧面；兩側白色拉鍊邊；乳頭、胸骨上凹痕
+    A0, A1 = math.radians(52), math.radians(128)
+    skin_secs = [(-27.5, 3.78, 0, 9.85, 3.62)] + [(x, T[x][0], 0, T[x][1] + 0.12, T[x][2] + 0.12) for x in (-26, -20, -12)] + [(-5, 3.62, 0, 8.22, 3.54)]
+    chest.append(loft("chest_skin", skin_secs, skin, n=20, ang=(A0, A1), solid=0.3))
+    for s in (-1, 1):
+        pts = []
+        for x in (-27.5, -26, -20, -12, -5):
+            cy, a, b = (3.78, 9.85, 3.62) if x == -27.5 else ((3.62, 8.22, 3.54) if x == -5 else (T[x][0], T[x][1] + 0.12, T[x][2] + 0.12))
+            t = A0 if s > 0 else A1
+            pts.append((x, cy + b * math.sin(t) + 0.05, a * math.cos(t)))
+        for i in range(len(pts) - 1):
+            chest.append(cyl_between(f"zip_{s}_{i}", pts[i], pts[i + 1], 0.28, white, verts=10))
+    for z in (-3.6, 3.6):
+        chest.append(ell(f"nipple_{z}", (-14, 7.43, z), (0.55, 0.12, 0.55), nip, seg=16, ring=8))
+    chest.append(ell("sternal_notch", (-26.2, 7.35, 0), (0.9, 0.12, 0.7), nip, seg=16, ring=8))
+    # 腹部中線拉鍊（外套下半拉起來）
+    tube_x("zip_belly", -4, 6.8, 6.65, 0, 0.22, white)
+
+    # 頸、頭（臉朝上、下巴朝 +x）
+    loft("neck", [(-33.5, 3.6, 0, 2.6, 2.7), (-31, 3.5, 0, 2.7, 2.8), (-29, 3.5, 0, 3.4, 2.9)], skin)
+    # 頭：先做平滑的橢圓頭型，再在表面「捏」出五官（高斯隆起／凹陷沿法線推），五官跟臉自然接在一起
+    HC, HR = (-36, 4.6, 0), (5.4, 4.6, 4.4)
+    FEAT = [  # (中心 x, 高, z), 量, (σx, σ高, σz)
+        ((-35.4, 9.15, 0), 1.45, (1.05, 1.0, 0.5)),     # 鼻樑
+        ((-34.5, 9.05, 0), 0.55, (0.5, 0.6, 0.8)),      # 鼻頭
+        ((-38.0, 8.6, 0), 0.55, (0.55, 0.8, 2.3)),      # 眉骨
+        ((-37.2, 8.6, -1.9), -0.6, (0.7, 0.7, 0.85)), ((-37.2, 8.6, 1.9), -0.6, (0.7, 0.7, 0.85)),   # 眼窩
+        ((-37.1, 8.5, -1.9), 0.3, (0.45, 0.5, 0.62)), ((-37.1, 8.5, 1.9), 0.3, (0.45, 0.5, 0.62)), # 閉著的眼皮
+        ((-34.8, 8.0, -2.7), 0.4, (1.2, 1.0, 1.0)), ((-34.8, 8.0, 2.7), 0.4, (1.2, 1.0, 1.0)),       # 臉頰
+        ((-33.4, 8.7, 0), 0.22, (0.6, 0.6, 1.3)),       # 嘴部
+        ((-31.8, 7.4, 0), 0.75, (0.9, 0.9, 1.3)),       # 下巴
+    ]
+    def bump(x, y, z):
+        d = 0.0
+        for (c, amp, sg) in FEAT:
+            d += amp * math.exp(-(((x - c[0]) / sg[0]) ** 2 + ((y - c[1]) / sg[1]) ** 2 + ((z - c[2]) / sg[2]) ** 2) / 2)
+        return d
+    def surf_y(x, z):                                    # 臉朝上：頭頂表面高度（含五官）
+        u = 1 - ((x - HC[0]) / HR[0]) ** 2 - ((z - HC[2]) / HR[2]) ** 2
+        y = HC[1] + HR[1] * math.sqrt(max(0.0, u))
+        return y + bump(x, y, z)
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=72, ring_count=44)
+    hd = bpy.context.object; hd.name = "head"; hd.scale = (HR[0], HR[2], HR[1]); hd.location = P(*HC); bpy.ops.object.transform_apply(scale=True, location=True)
+    bm = bmesh.new(); bm.from_mesh(hd.data); bm.normal_update()
+    for v in bm.verts:
+        x, y, z = v.co.x, v.co.z, -v.co.y
+        d = bump(x, y, z)
+        if abs(d) > 1e-4: v.co += v.normal * d
+    bm.to_mesh(hd.data); bm.free(); finish(hd, skin)
+    # 頭髮：比頭大一點的殼，減去一個罩住臉的橢球 → 平滑的髮際線（蓋住頭頂、後腦、耳朵上方；臉、耳朵、下巴露出來）
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=72, ring_count=44)
+    h = bpy.context.object; h.name = "hair"; h.scale = (5.62, 4.66, 4.84); h.location = P(-36.15, 4.55, 0)
+    bpy.ops.object.transform_apply(scale=True)
+    s = h.modifiers.new("solid", "SOLIDIFY"); s.thickness = 0.3; bpy.context.view_layer.objects.active = h; bpy.ops.object.modifier_apply(modifier="solid")
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=72, ring_count=44)
+    cut = bpy.context.object; cut.name = "hair_cut"; cut.scale = (6.0, 6.5, 7.5); cut.location = P(-32.5, 9.0, 0)
+    bpy.ops.object.transform_apply(scale=True)
+    boolean_diff(h, cut); finish(h, hair)
+    # 嘴唇、微張的嘴（人工呼吸口）、閉眼線、眉毛：貼在五官表面
+    ell("lip_up", (-33.85, surf_y(-33.85, 0) + 0.02, 0), (0.42, 0.22, 1.25), lip, seg=16, ring=8)
+    ell("lip_low", (-33.05, surf_y(-33.05, 0) + 0.02, 0), (0.42, 0.24, 1.15), lip, seg=16, ring=8)
+    ell("mouth", (-33.45, surf_y(-33.45, 0) + 0.06, 0), (0.24, 0.12, 0.9), dark, seg=16, ring=8)
+    for z in (-1.9, 1.9):
+        pts = [(-37.05, surf_y(-37.05, z + dz) + 0.04, z + dz) for dz in (-0.8, -0.3, 0.3, 0.8)]
+        for i in range(3): cyl_between(f"lash_{z}_{i}", pts[i], pts[i + 1], 0.12, dark, verts=8)
+        bp = [(-38.75, surf_y(-38.75, z + dz) + 0.05, z + dz * 1.15) for dz in (-0.9, 0, 0.9)]
+        for i in range(2): cyl_between(f"browh_{z}_{i}", bp[i], bp[i + 1], 0.1, line, verts=8)
+        ell(f"ear_{z}", (-36.4, 4.7, z * 2.3), (1.15, 1.45, 0.5), skin, seg=16, ring=10)
+
+    # 手臂（袖子有手肘轉折）、白色袖口、手腕、手掌＋手指
+    for s in (-1, 1):
+        z = 10 * s
+        ell(f"shoulder_{s}", (-26.6, 3.2, 9.3 * s), (2.6, 2.5, 2.4), suit)
+        loft(f"arm_{s}", [(-27.5, 3.0, z, 2.45, 2.35), (-20, 2.7, z, 2.3, 2.2), (-14, 2.55, z, 2.05, 1.95), (-12.5, 2.5, z, 2.1, 2.0), (-7, 2.45, z, 1.9, 1.85), (-3, 2.4, z, 1.78, 1.72)], suit)
+        loft(f"cuff_{s}", [(-3.1, 2.4, z, 1.86, 1.8), (-2.2, 2.4, z, 1.86, 1.8)], white)
+        loft(f"wrist_{s}", [(-2.3, 2.35, z, 1.3, 1.1), (-0.5, 2.3, z, 1.25, 1.0)], skin)
+        ell(f"palm_{s}", (1.3, 2.15, z), (1.95, 0.78, 1.35), skin)
+        for i, dz in enumerate((-0.95, -0.32, 0.32, 0.95)):
+            L = 1.7 if abs(dz) < 0.5 else 1.45
+            cyl_between(f"finger_{s}_{i}", (2.9, 2.05, z + dz), (2.9 + L, 1.95, z + dz * 1.08), 0.3, skin, verts=10)
+            ell(f"tip_{s}_{i}", (2.9 + L, 1.95, z + dz * 1.08), (0.31, 0.3, 0.31), skin, seg=10, ring=6)
+        cyl_between(f"thumb_{s}", (0.6, 2.4, z - 1.2 * s), (2.1, 2.5, z - 2.0 * s), 0.38, skin, verts=10)
+
+    # 腿（運動褲有膝蓋、白色側條）、球鞋
+    for s in (-1, 1):
+        z = 4 * s
+        loft(f"leg_{s}", [(5, 3.2, z, 3.3, 3.0), (12, 3.1, z, 3.05, 2.9), (19, 2.9, z, 2.75, 2.65), (21.5, 2.95, z, 2.8, 2.7), (28, 2.75, z, 2.5, 2.4), (35, 2.6, z, 2.2, 2.15), (36.6, 2.6, z, 2.2, 2.15)], suit)
+        tube_x(f"stripe_{s}", 6, 36.4, 3.1, z + s * 2.75, 0.24, white)
+        box(f"shoe_{s}", 36.4, z - 2.1, 40.6, z + 2.1, 0.4, 6.9, shoe, bevel=1.1, seg=4)
+        box(f"sole_{s}", 40.4, z - 2.15, 41.3, z + 2.15, 0.35, 7.0, white, bevel=0.3)
+        box(f"lace_{s}", 37.2, z - 1.0, 39.6, z + 1.0, 6.7, 7.05, white, bevel=0.2)
+
+    # 輸出：胸口一份、其他一份
+    allobj = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    body = [o for o in allobj if o not in chest]
+    if BAKE: bake_ao()                     # 烘焙環境遮蔽（縫隙變暗）到頂點顏色
+    for name, objs in (("anne_body", body), ("anne_chest", chest)):
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in objs: o.select_set(True)
+        bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, f"{name}.glb"), use_selection=True, export_format="GLB", export_apply=True, export_yup=True, export_animations=False, export_vertex_color="ACTIVE")
+        print("EXPORTED", name, len(objs), flush=True)
+
+PROPS = {"ct_scanner": ct_scanner, "mri_scanner": mri_scanner, "mr_stretcher": mr_stretcher, "crash_cart": crash_cart, "patient_monitor": patient_monitor, "contrast_injector": contrast_injector, "oxygen_cylinder": oxygen_cylinder, "wheelchair": wheelchair, "anne": anne_model}
 for name, fn in PROPS.items():
     if WANT and name not in WANT: continue
     fn()

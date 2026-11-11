@@ -92,13 +92,13 @@ export function createWorld(canvas) {
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     const k = size / px; sp.scale.set(cv.width * k, cv.height * k, 1);
-    sp.position.set(x, y, z); sp.renderOrder = 20; sp.layers.set(1); parent.add(sp);
+    sp.position.set(x, y, z); sp.renderOrder = 20; sp.layers.set(1); parent.add(sp); sp.userData.op = 1;
     (layers[layer] ||= []).push(sp);
     return sp;
   }
   function setLayer(name, on, dur = 0.6) {
     for (const sp of layers[name] || []) {
-      gsap.to(sp.material, { opacity: on ? 1 : 0, duration: dur, overwrite: true, onStart: () => { if (on) sp.visible = true; }, onComplete: () => { if (!on) sp.visible = false; } });
+      gsap.to(sp.userData, { op: on ? 1 : 0, duration: dur, overwrite: true, onUpdate: () => { sp.material.opacity = sp.userData.op; }, onStart: () => { if (on) sp.visible = true; }, onComplete: () => { if (!on) sp.visible = false; } });
     }
   }
 
@@ -170,6 +170,29 @@ export function createWorld(canvas) {
   box(286, 329, 289.5, 340, 2, 13, 0xef4444);                           // 等候區外門封閉
   ROOMS.examAll = [290, 203, 442, 372]; ROOMS.ct = [292, 205, 440, 270]; ROOMS.mri = [344, 300, 440, 370];
   ROOMS.wait = [292, 300, 344, 370]; ROOMS.corr = [292, 270, 327, 300];
+  // 烘焙光影 B①：牆腳暗帶（地面貼著牆的地方比較暗，像真的房間角落；只畫在考場地板上）
+  {
+    const gm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const [X1, Z1, X2, Z2] = [292, 205, 440, 370], BW = 5, Y = 0.61;
+    const strip = (x1, z1, x2, z2, dark) => {            // dark：哪一邊貼著牆（n／s／w／e）
+      x1 = Math.max(x1, X1); x2 = Math.min(x2, X2); z1 = Math.max(z1, Z1); z2 = Math.min(z2, Z2);
+      if (x2 - x1 < 1 || z2 - z1 < 1) return;
+      const pos = [], col = [];
+      [[0, 0.42], [0.35, 0.14], [1, 0]].forEach(([t, a]) => {
+        if (dark === "n" || dark === "s") { const z = dark === "n" ? z1 + (z2 - z1) * t : z2 - (z2 - z1) * t; pos.push(x1, Y, z, x2, Y, z); }
+        else { const x = dark === "w" ? x1 + (x2 - x1) * t : x2 - (x2 - x1) * t; pos.push(x, Y, z1, x, Y, z2); }
+        col.push(0, 0, 0, a, 0, 0, 0, a);
+      });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 4));
+      g.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4]);
+      const m = new THREE.Mesh(g, gm); m.renderOrder = 1; m.name = "wallBase"; scene.add(m);
+    };
+    for (const [x1, z1, x2, z2] of obstacles) {
+      if (x2 - x1 >= 6) { strip(x1, z1 - BW, x2, z1, "s"); strip(x1, z2, x2, z2 + BW, "n"); }
+      if (z2 - z1 >= 6) { strip(x1 - BW, z1, x1, z2, "e"); strip(x2, z1, x2 + BW, z2, "w"); }
+    }
+  }
   arrow(274, 247.5, 26, 0, 0xef4444, 1);
   const examTag = (t, x, y, z, o = {}) => label(t, x, y, z, { layer: "exam", ...o });
   examTag("檢查室 A｜CT 室", 400, 44, 216, { size: 9, border: "#ea580c" });
@@ -243,7 +266,7 @@ export function createWorld(canvas) {
   function consoleDesk(x1, z1, x2, z2, kind = "ct") { place(() => workstation(x2 - x1, z2 - z1, kind), (x1 + x2) / 2, (z1 + z2) / 2); }
   consoleDesk(729, 280, 811, 309); eqLabel("控制台＋手機", 770, 294, 22);
   const monitor = (x, z, rot = 0) => place(patientMonitor, x, z, rot);
-  swapMonitor(monitor(668, 360)); eqLabel("生理監視器", 668, 360, 30);
+  const ctMon = monitor(668, 360); swapMonitor(ctMon); eqLabel("生理監視器", 668, 360, 30);
   const injector = place(contrastInjector, 783, 345); swapMonitor(injector, "contrast_injector");                     // 對比劑打藥機（雙筒注射器）
   eqLabel("對比劑打藥機", 783, 345, 30);
   // 工作台：靠 CT 室北牆、大門旁；台面上放針頭與打針用品
@@ -301,18 +324,28 @@ export function createWorld(canvas) {
   const mriScreen = mriConsole.children[0].userData.screen, homeTex = mriScreen.material.map;
 
   // 等候區（MRI 室外）：設備與輪椅全部靠後牆（南牆）一字排開、正面朝北；東側留通道往 MRI 室
-  swapProp(placeL(wheelchair, 300, 363.5).children[0], "wheelchair"); labelL("輪椅", 300, 363.5, 20);
+  const wchair = placeL(wheelchair, 300, 363.5); swapProp(wchair.children[0], "wheelchair"); labelL("輪椅", 300, 363.5, 20);
   const cart = placeL(crashCart, 310.5, 364); labelL("急救車", 310.5, 364, 24, { bg: "#dc2626", fg: "#fff" });
   swapProp(cart.children[0], "crash_cart");               // Blender 版本：assets/props/crash_cart.glb
-  swapProp(placeL(oxygenCylinder, 318.5, 365).children[0], "oxygen_cylinder"); labelL("氧氣鋼瓶", 318.5, 365, 28);
+  const o2Cyl = placeL(oxygenCylinder, 318.5, 365); swapProp(o2Cyl.children[0], "oxygen_cylinder"); labelL("氧氣鋼瓶", 318.5, 365, 28);
   const waitMon = placeL(() => patientMonitor({ own: true }), 325.5, 363.5); swapMonitor(waitMon); labelL("生理監視器（已接安妮）", 325.5, 363.5, 31);
-  placeL(pulseOximeter, 332.5, 364.5); labelL("血氧機", 332.5, 364.5, 24);
+  const oxim = placeL(pulseOximeter, 332.5, 364.5); labelL("血氧機", 332.5, 364.5, 24);
   const detector = placeL(metalDetector, 338.5, 365); labelL("金屬掃描器", 338.5, 365, 27);
   const standWand = detector.children[0].userData.wand;
   // 抗磁推床在等候區中間，安妮躺在上面
-  const stretcher = placeL(mrStretcherWithAnne, 319, 330); labelL("抗磁推床＋安妮", 319, 330, 19);
+  const stretcher = placeL(mrStretcherWithAnne, 319, 330, Math.PI); labelL(   // 推床轉 180°：安妮頭朝東（MRI 室），推進去時頭先進、過床不用轉身
+   "抗磁推床＋安妮", 319, 330, 19);
   const annie = stretcher.children[0].userData.anne, annieCables = [];
-  swapProp(stretcher.children[0], "mr_stretcher", [annie]);   // Blender 版本：assets/props/mr_stretcher.glb
+  swapProp(stretcher.children[0], "mr_stretcher", [annie]);
+  // 安妮外觀（Blender 版本）：身體 anne_body.glb 掛在安妮身上；胸口 anne_chest.glb 放進會下陷的 chest 群組（群組原點在 (-16, 0.3, 0)）
+  Promise.all([loadModel("assets/props/anne_body.glb"), loadModel("assets/props/anne_chest.glb")]).then(([b, c]) => {
+    const look = annie.userData.look, chestG = annie.userData.chest;
+    const mb = b.scene.clone(true), mc = c.scene.clone(true); mc.position.set(16, -0.3, 0);
+    for (const m of [mb, mc]) m.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+    annie.add(mb); chestG.add(mc);
+    props.push({ g: annie, old: look.body, glb: mb }, { g: chestG, old: look.chest, glb: mc });   // O 鍵新舊對照
+    showProps(propsOn);
+  }).catch((e) => console.warn("安妮模型載入失敗，維持原本外觀：", e));   // Blender 版本：assets/props/mr_stretcher.glb
   // 等候區生理監視器已接到安妮：EKG 導線、血氧線、血壓管從監視器垂到地面再上到推床
   // 每個點用「監視器本地座標 m」或「安妮本地座標 a」表示：監視器或安妮移動時，導線跟著一起動（推進 MRI 室也不會斷）
   const [px, py, pz] = ANNE_LEADS.spo2, [cx, cy, cz] = ANNE_LEADS.cuff, EDGE = ["a", -16, 0.5, 14];
@@ -333,7 +366,26 @@ export function createWorld(canvas) {
   }
   updateCables(true);
   // MRI 室的生理監視器：靠北牆、在 MRI 旁，螢幕朝南對著房間
-  swapMonitor(placeL(patientMonitor, 402, 307, Math.PI)); labelL("生理監視器", 402, 307, 31);
+  const mriMon = placeL(patientMonitor, 402, 307, Math.PI); swapMonitor(mriMon); labelL("生理監視器", 402, 307, 31);
+  // 烘焙光影 B②：接觸陰影（落地儀器底下一圈柔和的暗影，讓東西「站」在地上；掛在儀器身上，推走時跟著走）
+  {
+    const cv = document.createElement("canvas"); cv.width = cv.height = 128;
+    const x = cv.getContext("2d"), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(0.5, "rgba(0,0,0,0.7)"); gr.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(cv);
+    const contact = (obj, op = 0.5, k = 1.5) => {
+      scene.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(obj);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+      m.rotation.x = -Math.PI / 2; m.scale.set((bb.max.x - bb.min.x) * k, (bb.max.z - bb.min.z) * k, 1);
+      m.position.set((bb.min.x + bb.max.x) / 2, 0.62, (bb.min.z + bb.max.z) / 2); m.renderOrder = 2; m.name = "contactShadow";
+      scene.add(m); obj.attach(m);
+    };
+    for (const g of [wchair, cart, o2Cyl, waitMon, oxim, detector, stretcher, mriMon, mriConsole]) contact(g.children[0]);
+    for (const g of [ctMon, injector]) contact(g);
+    contact(ctItem, 0.35, 1.15); contact(mriItem, 0.35, 1.15);
+  }
   setLayer("eq", false, 0); setLayer("exam", false, 0);
 
   // ---------- 房間高亮（地面發光＋外框） ----------
@@ -792,6 +844,23 @@ export function createWorld(canvas) {
   };
 
   const dualAim = { ct: { p: new THREE.Vector3(), l: new THREE.Vector3() }, mri: { p: new THREE.Vector3(), l: new THREE.Vector3() } };
+  // 第 13 頁急救：右邊 MRI 畫面鏡頭拉近動作（主體放在畫面左上：右上有監視器小視窗、下方有步驟清單）
+  const CAM_CPR = {
+    wide: { pos: [350, 74, 296], look: [321, 0, 327] },            // 原本的全景
+    tap: { pos: [307.2, 42, 314.3], look: [321.4, 8.6, 331] },     // 拍肩叫喚（從西北看：床頭的云玎不會擋鏡頭）
+    cpr: { pos: [305.6, 40.4, 317.2], look: [319.1, 8.7, 333.1] }, // 壓胸
+    cartO2: { pos: [316.3, 43.4, 330.8], look: [312.5, 7.2, 355.5] }, // 急救車＋氧氣鋼瓶（牆邊）
+    head: { pos: [313.3, 42.5, 312.4], look: [328.2, 7.4, 330] },    // 床頭（東）：墊背板、BVM
+    hand: { pos: [305.1, 55, 316.1], look: [323.6, 11.5, 337.8] },   // 交班（標示較長，鏡頭稍遠）
+    push: { pos: [327.4, 44.9, 322.5], look: [323.4, 7.1, 348.3] },  // 推急救車到床邊
+    pads: { pos: [298.2, 42.4, 327.7], look: [319, 8.3, 330.5] },    // 貼片、判讀：從床尾（西）看，瑞益與曉鏵一左一右
+  };
+  DUAL_POSE.mri[15] = CAM_CPR.tap; DUAL_POSE.mri[17] = CAM_CPR.cpr; DUAL_POSE.mri[18] = CAM_CPR.head; DUAL_POSE.mri[20] = CAM_CPR.hand;   // 16、19、21 維持全景（21 的鏡頭在動畫裡跟拍）
+  function camTo(tl, pose, t, dur = 1.4) {               // 動畫裡移動 MRI 畫面鏡頭（跟拍）
+    const a = dualAim.mri, e = "power2.inOut";
+    tl.to(a.p, { x: pose.pos[0], y: pose.pos[1], z: pose.pos[2], duration: dur, ease: e }, t);
+    tl.to(a.l, { x: pose.look[0], y: pose.look[1], z: pose.look[2], duration: dur, ease: e }, t);
+  }
   function aimDual(id, pose, animate) {
     const a = dualAim[id];
     if (!animate) { gsap.killTweensOf([a.p, a.l]); a.p.set(...pose.pos); a.l.set(...pose.look); return; }   // 先停掉還在跑的鏡頭移動（快速連按再倒退時）
@@ -816,6 +885,32 @@ export function createWorld(canvas) {
     gsap.killTweensOf(split);
     if (dur > 0) gsap.to(split, { v: r, duration: dur, ease: "power2.inOut" }); else split.v = r;
   }
+  // 設備名稱標籤：鏡頭靠近時淡出（近景不重疊、不擋人），拉遠再淡入；每個鏡頭畫之前各算一次（左右雙畫面各自判斷）
+  const _lv = new THREE.Vector3();
+  // 規則：標籤在畫面上互相重疊時，只留離鏡頭近的那個（遠的淡出）；碰到上方標題列、被畫面邊緣切到、離鏡頭非常近也淡出；其他照常顯示
+  const _lp = new THREE.Vector3();
+  function labelFade(cam) {
+    const tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), items = [];
+    for (const sp of layers.eq || []) {
+      if (!sp.visible) continue;
+      sp.getWorldPosition(_lv); const d = cam.position.distanceTo(_lv);
+      _lp.copy(_lv).project(cam);
+      if (_lp.z > 1 || Math.abs(_lp.x) > 1.3 || Math.abs(_lp.y) > 1.3) { sp.userData.fv = 0; sp.material.opacity = 0; continue; }
+      const ws = sp.getWorldScale(_lv);
+      const k = sp.material.sizeAttenuation === false ? 1 : d;   // 第一人稱時標籤用固定畫面大小（不隨距離縮放）
+      items.push({ sp, d, x: _lp.x, y: _lp.y, hw: ws.x / 2 / (k * tanH * cam.aspect), hh: ws.y / 2 / (k * tanH) });
+    }
+    items.sort((a, b) => a.d - b.d);
+    const kept = [];
+    for (const it of items) {
+      const hit = kept.some((k) => Math.abs(it.x - k.x) < it.hw + k.hw && Math.abs(it.y - k.y) < it.hh + k.hh);
+      const cut = it.y + it.hh > 0.74 || Math.abs(it.x) + it.hw > 0.98 || it.y - it.hh < -0.98;   // 碰到上方標題列、被畫面邊緣切到
+      const target = hit || cut || it.d < 12 ? 0 : 1;
+      if (target) kept.push(it);
+      const u = it.sp.userData; u.fv = (u.fv ?? target) + (target - (u.fv ?? target)) * 0.18;   // 慢慢淡入淡出
+      it.sp.material.opacity = u.op * u.fv;
+    }
+  }
   function renderDual() {
     const w = view.w, h = view.h, half = Math.floor(w * split.v);
     renderer.setScissorTest(true);
@@ -823,7 +918,7 @@ export function createWorld(canvas) {
       if (vw <= 0) continue;                             // split 0：只畫右邊鏡頭（整個畫面）
       const c = dualCam[id], a = dualAim[id];
       c.aspect = vw / h; c.updateProjectionMatrix(); c.position.copy(a.p); c.lookAt(a.l);
-      renderer.setViewport(x, 0, vw, h); renderer.setScissor(x, 0, vw, h); renderer.render(scene, c);
+      labelFade(c); renderer.setViewport(x, 0, vw, h); renderer.setScissor(x, 0, vw, h); renderer.render(scene, c);
     }
     renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
   }
@@ -982,7 +1077,7 @@ export function createWorld(canvas) {
     if (on && !o2Line) {
       annie.updateMatrixWorld(true);
       const a = new THREE.Vector3(318.5, 17, 365), b = bvm.localToWorld(new THREE.Vector3(-12, 2, 0));
-      o2Line = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, new THREE.Vector3(316, 3, 355), new THREE.Vector3(306, 3, 340), b]), 48, 0.35, 6), mat(0x22c55e, { roughness: 0.5 }));
+      o2Line = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, new THREE.Vector3(316, 3, 355), new THREE.Vector3(306, 3, 340), b]), 64, 0.2, 8), mat(0x22c55e, { roughness: 0.5 }));
       scene.add(o2Line);
     }
     if (o2Line) o2Line.visible = on;
@@ -1000,25 +1095,153 @@ export function createWorld(canvas) {
     if (on) compressTw = gsap.to(cprK, { k: 1, duration: 0.27, repeat: -1, yoyo: true, ease: "sine.inOut", onUpdate: () => setCprK(cprK.k) });
   }
   let hrTw = null;
+  // 急救車上的電擊器（Blender 版本 crash_cart.glb）：貼片貼上後螢幕亮起、畫心電圖（跟監視器一樣是心跳停止的平線；壓胸時出現壓胸干擾波）；
+  // 判讀時（大家手離開病人）指示燈閃、波形變平線。不放文字。
+  let defibOn = false, defibAnalyze = false, defib = null;
+  function updateDefib(now) {
+    if (!defib) {
+      const scr = cart.getObjectByName("defib_screen"), b1 = cart.getObjectByName("defib_btn_1"), b2 = cart.getObjectByName("defib_btn_2");
+      if (!scr || !b1 || !b2) return;
+      const cv = document.createElement("canvas"); cv.width = 256; cv.height = 156;
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 4.0), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+      plane.position.set(-7.85, 45.35, -5.62); plane.rotation.y = Math.PI; scr.parent.add(plane);   // 貼在原本的螢幕前面（螢幕朝 -z）
+      for (const b of [b1, b2]) { b.material = b.material.clone(); b.userData.i = b.material.emissiveIntensity; }
+      defib = { cv, g: cv.getContext("2d"), tex, plane, b1, b2, trace: new Array(128).fill(0), last: 0, ph: 0 };
+    }
+    const D = defib;
+    D.plane.visible = defibOn;
+    const flash = defibAnalyze && (now / 1000 * 2.5) % 1 < 0.5;
+    D.b1.material.emissiveIntensity = defibOn && !defibAnalyze ? D.b1.userData.i * 2 : D.b1.userData.i;   // 綠燈：開機
+    D.b2.material.emissiveIntensity = flash ? D.b2.userData.i * 4 : D.b2.userData.i;                     // 黃燈：判讀中閃
+    if (!defibOn || now - D.last < 33) return;              // 約 30 fps 更新螢幕
+    D.last = now; D.ph += 1;
+    const k = defibAnalyze ? 0 : cprK.k;                    // 壓胸干擾：跟著瑞益壓下的程度
+    D.trace.shift(); D.trace.push(k * 0.85 + 0.03 * Math.sin(D.ph * 0.9) + (Math.random() - 0.5) * 0.03);
+    const g = D.g, W = 256, H = 156;
+    g.fillStyle = "#04110b"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "rgba(52,211,153,.12)"; g.lineWidth = 1;
+    for (let x = 0; x < W; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    for (let y = 0; y < H; y += 26) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    g.strokeStyle = "#4ade80"; g.lineWidth = 3; g.beginPath();
+    D.trace.forEach((v, i) => { const x = i * 2, y = H * 0.62 - v * H * 0.4; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+    if (defibAnalyze) { g.fillStyle = (now / 1000 * 2.5) % 1 < 0.5 ? "#facc15" : "#3f3a12"; g.beginPath(); g.arc(W - 18, 18, 9, 0, Math.PI * 2); g.fill(); }   // 判讀中：右上黃燈
+    D.tex.needsUpdate = true;
+  }
+  // MRI（Blender 版本 mri_scanner.glb）：掃描時孔內燈亮起照到安妮、頂部狀態窗亮起閃爍、紫色光環一明一暗；停止掃描就熄掉
+  let mriScanOn = false, mriParts = null;
+  function updateMRI(now) {
+    if (!mriParts) {
+      const light = mriItem.getObjectByName("bore_light"), status = mriItem.getObjectByName("status_screen"), rings = [];
+      if (!light || !status) return;
+      mriItem.traverse((o) => { if (o.name.startsWith("ring") && o.isMesh) rings.push(o); });
+      for (const o of [light, status, ...rings]) o.material = o.material.clone();
+      const lamp = new THREE.PointLight(0xdbeafe, 0, 40, 2); light.updateMatrixWorld(true);
+      lamp.position.copy(new THREE.Box3().setFromObject(light).getCenter(new THREE.Vector3())); lamp.position.y -= 3; scene.add(lamp);   // 孔內燈照到安妮
+      mriParts = { light, status, rings, lamp };
+    }
+    const { light, status, rings, lamp } = mriParts, s = now / 1000;
+    if (mriScanOn) {
+      light.material.emissiveIntensity = 2.2; lamp.intensity = 60;
+      status.material.emissive.set(0x34d399); status.material.emissiveIntensity = (s * 1.6) % 1 < 0.6 ? 1.0 : 0.35;   // 掃描中：綠色狀態燈一閃一閃
+      const k = 0.5 + 0.5 * Math.sin(s * Math.PI * 2 * 0.9); rings.forEach((r) => { r.material.emissiveIntensity = 0.55 + 0.5 * k; });
+    } else {
+      light.material.emissiveIntensity = 0.25; lamp.intensity = 0;
+      status.material.emissive.set(0x4b8bd6); status.material.emissiveIntensity = 0.35;
+      rings.forEach((r) => { r.material.emissiveIntensity = 0.55; });
+    }
+  }
+  // CT（Blender 版本 ct_scanner.glb）：送進機架定位時，機架上方的紅色雷射往下打出一道光面，在病人身上畫出十字；掃描時橘色光環變亮、一明一暗
+  let ctLaserOn = false, ctScanOn = false, ctRing = null;
+  const ctLaser = new THREE.Group(); ctLaser.visible = false; scene.add(ctLaser);
+  const CT_LX = 419.0, CT_LZ = 237.65;                    // 雷射在機架正面（x）、檢查床中線（z）
+  {
+    const sheet = new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+    const fan = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(CT_LX, 21.1, CT_LZ), new THREE.Vector3(CT_LX, 9.1, CT_LZ - 4), new THREE.Vector3(CT_LX, 9.1, CT_LZ + 4)]);
+    ctLaser.add(new THREE.Mesh(fan, sheet));                // 從雷射孔往下打的扇形光面
+    const red = new THREE.MeshBasicMaterial({ color: 0xff3b3b, toneMapped: false });
+    const onTable = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 7.8), red); onTable.position.set(CT_LX, 9.08, CT_LZ); ctLaser.add(onTable);
+    const body = new THREE.Group(); body.position.set(CT_LX, 11.95, CT_LZ); ctLaser.add(body); ctLaser.userData.body = body;   // 打在身上的十字
+    body.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 5.2), red), new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.05, 0.14), red));
+  }
+  function updateCT(now) {
+    ctLaser.visible = ctLaserOn; ctLaser.userData.body.visible = ctLaserOn && sp.position.x > 398.4;
+    if (!ctRing) { const r = ctItem.getObjectByName("ring"); if (!r) return; r.material = r.material.clone(); r.material.emissive.set(0xff5a00); ctRing = r; }   // 亮度超過 1 會被壓成偏白：維持橘色
+    ctRing.material.emissiveIntensity = ctScanOn ? 0.6 + 0.45 * (0.5 + 0.5 * Math.sin(now / 1000 * Math.PI * 2 * 1.2)) : 0.35;   // 平常調暗、掃描時亮起來一明一暗（保留橘色）
+  }
+  // 打藥機（Blender 版本 contrast_injector.glb）：打對比劑時推桿往前推、琥珀色對比劑變少（注射頭繞 (-15, 63, 0) 轉 0.5，針筒沿本地 -x）
+  const INJ_AXIS = new THREE.Vector3(-Math.cos(0.5), -Math.sin(0.5), 0), INJ_USED = 4.5;   // 推進 4.5（約打掉四成），IV loss 後就停
+  let inj = null;
+  function injParts() {
+    if (inj) return inj;
+    const root = injector.children[0], fluid = root.getObjectByName("fluid_-4"), plunger = root.getObjectByName("plunger_-4"), rod = root.getObjectByName("rod_-4");
+    if (!fluid || !plunger || !rod) return null;
+    const head = new THREE.Group(); head.position.set(-15, 63, 0); head.rotation.z = 0.5; fluid.parent.add(head);
+    const tipEnd = new THREE.Group(); tipEnd.position.set(-22.5, 0, -4); head.add(tipEnd);   // 藥液靠針頭那一端（固定）
+    const liq = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 1, 24), fluid.material); liq.rotation.z = Math.PI / 2; tipEnd.add(liq);
+    fluid.visible = false;                                  // 原本的藥液頂點烤在原位、不好縮：換成可以縮短的這段
+    inj = { liq, plunger, rod, p0: plunger.position.clone(), r0: rod.position.clone(), d: 0 };
+    return inj;
+  }
+  function setInj(d) {
+    const I = injParts(); if (!I) return;
+    I.d = d; const L = 11 - d;
+    I.liq.scale.y = L; I.liq.position.x = L / 2;
+    I.plunger.position.copy(I.p0).addScaledVector(INJ_AXIS, d); I.rod.position.copy(I.r0).addScaledVector(INJ_AXIS, d);
+  }
+  // 生理監視器頂部警示燈（Blender 版本的 alarm_lamp）：AF 黃燈慢閃、心跳停止紅燈快閃＋紅光照到周圍；平常不亮
+  let lampMode = null, lamp = null, lampLight = null;
+  function updateLamp(now) {
+    if (!lamp) {
+      lamp = waitMon.getObjectByName("alarm_lamp"); if (!lamp) return;
+      lamp.material = lamp.material.clone();               // 三台監視器共用材質：只改接著安妮這台
+      lamp.geometry = lamp.geometry.clone(); lamp.geometry.computeBoundingBox();   // 頂點在匯出時已放在原位：改成以燈條中心為原點（放大、光暈才會在燈上）
+      { const c = lamp.geometry.boundingBox.getCenter(new THREE.Vector3()); lamp.geometry.translate(-c.x, -c.y, -c.z); lamp.position.add(c); }
+      lamp.userData.base = { c: lamp.material.color.clone(), e: lamp.material.emissive.clone(), i: lamp.material.emissiveIntensity };
+      lampLight = new THREE.PointLight(0xef4444, 0, 30, 2); lampLight.position.set(0, 4, 0); lamp.add(lampLight);
+      lamp.scale.set(1.35, 1.8, 1.35);                       // 燈條放大一點，從遠處也看得到
+      const cv = document.createElement("canvas"); cv.width = cv.height = 128; const g = cv.getContext("2d");
+      const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.25, "rgba(255,255,255,.55)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), color: 0xef4444, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      halo.scale.set(16, 10, 1); lamp.add(halo); lamp.userData.halo = halo;   // 亮燈時的光暈
+    }
+    const halo = lamp.userData.halo;
+    const m = lamp.material, s = now / 1000;
+    if (lampMode === "af") {
+      const k = 0.5 + 0.5 * Math.sin(s * Math.PI * 1.6);
+      m.color.set(0xfacc15); m.emissive.set(0xfacc15); m.emissiveIntensity = 0.6 + 2.2 * k;
+      lampLight.color.set(0xfacc15); lampLight.intensity = 40 * k; halo.material.color.set(0xfacc15); halo.material.opacity = 0.25 + 0.55 * k;
+    } else if (lampMode === "arrest") {
+      const on = (s * 2.4) % 1 < 0.5;
+      m.color.set(on ? 0xef4444 : 0x7f1d1d); m.emissive.set(0xef4444); m.emissiveIntensity = on ? 3.2 : 0.12;
+      lampLight.color.set(0xef4444); lampLight.intensity = on ? 80 : 0; halo.material.color.set(0xef4444); halo.material.opacity = on ? 0.9 : 0;
+    } else {
+      const b = lamp.userData.base; m.color.copy(b.c); m.emissive.copy(b.e); m.emissiveIntensity = b.i; lampLight.intensity = 0; halo.material.opacity = 0;
+    }
+  }
   function vitals(mode, hr, animateTo) { hrTw?.kill(); hrTw = null; annieVitals.mode = mode; annieVitals.hr = hr; if (animateTo != null) hrTw = gsap.to(annieVitals, { hr: animateTo, duration: 12, ease: "none" }); }
   // 各人在每一步的定點（x, z, 面向的點）
   const CT_SP = [398, 249, [386, 254]], CT_RAD = [386, 255, [398, 249]], CT_NURSE = [375, 247, [398, 249]];
   const CT_RAD_LIE = [408, 251, [408, 238]], CT_NURSE_IV = [407, 227.5, [407, 238]];
-  const M_A = [313, 320, [313, 340]], M_A_CON = [357, 335, [380, 335]], M_B = [325, 320, [325, 340]], M_B_SWEPT = [331, 322, [331, 340]], M_B_MANUAL = [316, 323, [316, 340]];
+  const M_A = [313, 320, [313, 340]], M_A_CON = [357, 335, [380, 335]], M_B = [325, 320, [325, 340]], M_B_SWEPT = [307, 322, [307, 340]], M_B_MANUAL = [322, 323, [322, 340]];   // 安妮頭朝東：探測棒從東（頭）掃到西（腳）
   // 第 10 頁定點：CT 放射師、護理師回控制台；MRI 推床停在 MRI 檢查床南側，安妮過床到 MRI 床（頭朝磁體）
   const CT_RAD_CON = [347, 226, [360, 226]], CT_NURSE_CON = [347, 237, [360, 237]], SP_IN_DX = 8;
   const STR_HOME = [319, 330], STR_PARK = [395, 349], STR_PATH = [[319, 330], [319, 356], [392, 356], [395, 349]];
   const ANNIE_TABLE = [403, 9, 335], ANNIE_BORE = 412;     // 整個躺在 MRI 床上、頭朝磁體；送進去時頭部先進磁體
   const M_A_CON2 = [357, 330, [380, 330]], M_B_CON2 = [357, 342, [380, 342]];
-  const MON_HOME = [325.5, 363.5], MON_DX = -23;
+  const MON_HOME = [325.5, 363.5], MON_DX = 25, MON_PARK = [17, 9];   // 監視器在床頭（東）旁；停在 MRI 室時在推床東南側（不碰到磁體）
+  const angTo = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));   // 轉到 to 的最短角度（不會多轉一圈）
+  const monOff = (k) => { const e = k * k * (3 - 2 * k); return [MON_DX + (MON_PARK[0] - MON_DX) * e, MON_PARK[1] * e]; };   // k：0＝在等候區、1＝停在 MRI 室
   const M_A_SIDE = [405, 344, [405, 330]], M_B_SIDE = [395, 326, [395, 340]];
   // 第 12、13 頁：安妮推回等候區；叫病人／壓胸的放射師（crew[3]）在推床南側胸口旁，撥 999 的放射師（crew[2]）撥完到床頭拿 BVM
   const MON_BACK = [STR_HOME[0] + MON_DX, STR_HOME[1]];
-  const R_TAP = [313.5, 335.4, [311.8, 330]];          // 叫：瑞益站到安妮肩膀旁、斜向床頭（雙手放兩肩，見 people.js TAP）
-  const R_CPR = [314.5, 335.6, [314.5, 330]], R_HEAD = [300, 330, [319, 330]], R_PHONE = [357, 335, [380, 335]], N_ARRIVE = [328, 342, [319, 330]];
+  const R_TAP = [324.5, 335.4, [326.2, 330]];          // 叫：瑞益站到安妮肩膀旁、斜向床頭（東）（雙手放兩肩，見 people.js TAP）
+  const R_CPR = [323.5, 335.6, [323.5, 330]], R_HEAD = [338, 330, [319, 330]], R_PHONE = [357, 335, [380, 335]], N_ARRIVE = [328, 342, [319, 330]];
   const CART_HOME = [310.5, 364], CART_NEAR = [332, 352];
+  const BADGE_BVM = [332.3, 20, 328.8], BADGE_PADS = [341.1, 4, 323];   // 拉近鏡頭時標示的位置
   const N_CART = [305.3, 360.6];                         // 曉鏵推車：站在急救車左前角、面向前進方向，右手扶車頂（people.js GUIDE）
-  const N_PADS = [311, 325.2, [314.5, 330]];             // 曉鏵貼電擊貼片：站在推床北側偏床頭（瑞益斜對面、兩人頭不相碰），彎腰雙手各按一片（people.js PADS）
+  const N_PADS = [318, 325.6, [323.5, 330.1]];             // 曉鏵貼電擊貼片：站在推床北側偏床頭（瑞益斜對面、兩人頭不相碰），彎腰雙手各按一片（people.js PADS）
   // 第 14 頁：兒子（CT 標準病人）衝出 CT 室 → 走廊 → 等候區；999 急救團隊（醫師白衣＋2 位隊員）從走廊進來
   const team999 = ["doctor", "medic_m", "medic_f"].map((id) => { const m = makePerson(id, { label: false }); m.visible = false; scene.add(m); return m; });
   const SON_OUT = [[380, 240], [340, 246], [306, 250], [306, 292]], RAD_OUT_END = [306, 278];
@@ -1034,7 +1257,7 @@ export function createWorld(canvas) {
     ct: [[372, 211, [398, 245]], [384, 211, [398, 245]]],        // CT 室北牆
     mriW: [[306, 304, [319, 330]], [316, 303, [319, 330]]],      // MRI 等候區北側（第 9 頁）
     mriR: [[372, 305, [395, 335]], [384, 305, [395, 335]]],      // MRI 室北牆（第 10–12 頁）
-    mriE: [[341, 312, [319, 330]], [341, 322, [319, 330]]],      // 急救時：等候區東側
+    mriE: [[333, 306, [319, 330]], [339, 310, [319, 330]]],      // 急救時：等候區東北角（床頭在東，讓出監視器與 BVM 的位置；原本 x 347、352 站進隔間牆裡）
     ctE: [[297, 348, [319, 330]], [297, 358, [319, 330]]],       // 急救時 CT 考官跟過來：等候區西側
   };
   const examAll = () => [...EXAM.ct, ...EXAM.mri];
@@ -1065,7 +1288,7 @@ export function createWorld(canvas) {
     if (annie.parent !== scene) scene.attach(annie);
     annie.position.set(x, ANNIE_TABLE[1], ANNIE_TABLE[2]); annie.rotation.set(0, Math.PI, 0); annie.scale.setScalar(S);
     stretcher.position.set(STR_PARK[0], 0, STR_PARK[1]);
-    waitMon.position.set(STR_PARK[0] + MON_DX, 0, STR_PARK[1]);
+    waitMon.position.set(STR_PARK[0] + MON_PARK[0], 0, STR_PARK[1] + MON_PARK[1]);
     updateCables(true);
   }
   const putAt = (m, [x, z, look]) => { m.position.set(x, 0, z); face(m, ...look); };
@@ -1075,7 +1298,7 @@ export function createWorld(canvas) {
   const ISBAR_VIEW = {
     32: { src: 26, cam: { pos: [300, 215, 420], look: [302, 0, 292] }, show: [] },                     // 總覽（考場在畫面右邊）
     33: { src: 10, cam: { pos: [332, 100, 400], look: [350, 4, 330] }, show: ["callMRI"], k: 1.8 },    // 1 MRI 躁動：聯絡臨床醫師
-    34: { src: 20, cam: { pos: [292, 112, 398], look: [290, 0, 328] }, show: ["handoff"], k: 1.6 },    // 2 護理師支援：放射師交班
+    34: { src: 20, cam: { pos: [292, 112, 398], look: [290, 0, 328] }, show: ["handoff"], k: 1.6, at: { handoff: [328, 24, 342] } },    // 2 護理師支援：放射師交班
     35: { src: 26, cam: { pos: [292, 112, 398], look: [290, 0, 328] }, show: ["handoff999"] },         // 3 急救團隊到場：護理師跟醫師交班
     36: { src: 10, cam: { pos: [310, 110, 308], look: [328, 4, 234] }, show: ["callCT"] },             // 4 CT IV loss：跟臨床交班
     37: { src: 11, cam: { pos: [310, 110, 308], look: [328, 4, 234] }, show: ["teachIV"] },            // 5 IV loss 後續：衛教
@@ -1086,7 +1309,7 @@ export function createWorld(canvas) {
     const a = dualAim.mri, p0 = a.p.clone(), l0 = a.l.clone(), wasOn = dualOn;
     setDualCore(26, false); placeExam(null); doorScene.userData.ex.visible = false;   // 片尾：考官都不在場
     for (const b of Object.values(B)) b.visible = false;
-    leadRing.visible = false; compress(false); showO2(false); showPadsLine(false); bvm.visible = false;
+    leadRing.visible = false; compress(false); showO2(false); showPadsLine(false); bvm.visible = false; lampMode = null; ctLaserOn = ctScanOn = mriScanOn = defibOn = false;   // 片尾：警示燈關掉
     cart.position.set(338, 0, 308);                    // 急救車移到推床後面，不擋住謝幕的人
     const cast = [crew[2], crew[3], crew[0], sp, crew[1], ...team999];   // 三位放射師、兒子、護理師、醫師＋兩位隊員
     cast.forEach((m, i) => { m.visible = true; m.position.set(296 + i * 6.5, 0, 352); m.rotation.set(0, 0, 0); face(m, m.position.x, 430); setPose(m, "stand"); setExpr(m, "smile"); });   // 謝幕：微笑
@@ -1119,15 +1342,16 @@ export function createWorld(canvas) {
     const nW = annie.localToWorld(new THREE.Vector3(-30, 6, 0)), wW = annie.localToWorld(new THREE.Vector3(4, 7.5, 5.4));
     const hand = (o) => { crew[3].attach(o); gsap.to(o.position, { x: 2.6, y: 11, z: 0.8, duration: 0.5, ease: "power2.out" }); };   // 拿在手上
     putAt(crew[3], M_B_MANUAL);
-    walk(tl, crew[3], [316, 323], [[nW.x, 323]], 0.2, [nW.x, 340]);                                     // 走到頸部旁
+    walk(tl, crew[3], M_B_MANUAL.slice(0, 2), [[nW.x, 323]], 0.2, [nW.x, 340]);                                     // 走到頸部旁
     tl.call(() => { B.trapTake.visible = true; over(B.trapTake, crew[3], 26); }, null, ">");
     tl.to(trapPatch.position, { y: "+=3", duration: 0.6, ease: "power2.out" }, ">+0.2");                // 撕下貼布
     tl.call(() => hand(trapPatch), null, ">");
-    walk(tl, crew[3], [nW.x, 323], [[338, 323], [338, 338], [wW.x + 2, 338]], tl.duration() + 0.4, [wW.x, wW.z]);   // 繞到口袋那一側
+    const pocketN = wW.z < 330, PK = pocketN ? [wW.x + 2, 323] : [wW.x + 2, 338];             // 口袋在哪一側就走到哪一側（安妮頭朝東時右口袋在北側）
+    walk(tl, crew[3], [nW.x, 323], pocketN ? [PK] : [[338, 323], [338, 338], PK], tl.duration() + 0.4, [wW.x, wW.z]);   // 走到口袋旁
     tl.to(trapWarmer.position, { y: "+=3", x: "+=1", duration: 0.6, ease: "power2.out" }, ">+0.2");      // 從口袋拿出暖暖包
     tl.call(() => hand(trapWarmer), null, ">");
     tl.call(() => { B.trapTake.visible = false; }, null, ">+0.3");
-    walk(tl, crew[3], [wW.x + 2, 338], [[340, 352], [357, 352], DESK_STAND.slice(0, 2)], tl.duration() + 0.2, DESK_STAND[2]);   // 走到 MRI 控制台
+    walk(tl, crew[3], PK, pocketN ? [[338, 323], [340, 352], [357, 352], DESK_STAND.slice(0, 2)] : [[340, 352], [357, 352], DESK_STAND.slice(0, 2)], tl.duration() + 0.2, DESK_STAND[2]);   // 走到 MRI 控制台
     tl.call(() => {
       for (const [o, k] of [[trapPatch, "patch"], [trapWarmer, "warmer"]]) {
         scene.attach(o);
@@ -1174,11 +1398,11 @@ export function createWorld(canvas) {
     const iv = ISBAR_VIEW[step];
     if (!iv) return setDualCore(step, animate);
     const a = dualAim.mri, p0 = a.p.clone(), l0 = a.l.clone(), wasOn = dualOn;
-    setDualCore(iv.src, false);                        // 人物、道具直接到當時那一步的位置（不重播走路）
+    setDualCore(iv.src, false); lampMode = null; ctLaserOn = ctScanOn = mriScanOn = false; defibAnalyze = false;      // 人物、道具直接到當時那一步的位置（不重播走路）；ISBAR 回顧時警示燈不閃
     if (animate && wasOn) gsap.fromTo(document.getElementById("flash"), { opacity: 0.55 }, { opacity: 0, duration: 0.6, ease: "power2.out" });   // 跳到另一個時間點：白光轉場
     if (animate && wasOn) { a.p.copy(p0); a.l.copy(l0); aimDual("mri", iv.cam, true); } else aimDual("mri", iv.cam, false);
     for (const b of Object.values(B)) b.visible = false;
-    for (const k of iv.show) { B[k].visible = true; B[k].userData.s0 ||= B[k].scale.clone(); B[k].scale.copy(B[k].userData.s0).multiplyScalar(iv.k || 1); if (animate) gsap.fromTo(B[k].material, { opacity: 0 }, { opacity: 1, duration: 0.5, delay: 1.2 }); }
+    for (const k of iv.show) { B[k].visible = true; if (iv.at?.[k]) B[k].position.set(...iv.at[k]); B[k].userData.s0 ||= B[k].scale.clone(); B[k].scale.copy(B[k].userData.s0).multiplyScalar(iv.k || 1); if (animate) gsap.fromTo(B[k].material, { opacity: 0 }, { opacity: 1, duration: 0.5, delay: 1.2 }); }
   }
   // 第 14 頁兒子衝進等候區：鏡頭切到瑞益（壓胸中）的眼睛，看著兒子衝過來大鬧，約 4.5 秒後拉回等候區全景
   let pov = null;
@@ -1215,6 +1439,7 @@ export function createWorld(canvas) {
     sonShake?.kill(); sonShake = null;
     const was = dualOn; dualOn = step != null;
     if (!dualOn) {                                     // 離開第 9 頁：只還原第 9 頁自己改過的東西
+      lampMode = null; ctLaserOn = ctScanOn = mriScanOn = defibOn = defibAnalyze = false;   // 儀器燈號都關掉（導覽頁、Debrief 不會亮著）
       if (was) {
         team999.forEach((m) => { m.visible = false; }); leadRing.visible = false;
         if (doorModeNow !== "split" && doorModeNow !== "spToCT") placeExam(null);
@@ -1245,6 +1470,10 @@ export function createWorld(canvas) {
     // 第 12、13 頁
     board.visible = bvm.visible = step >= 18; board.position.x = -10; carry.visible = false; tuckBoard(false); setO2Flow(step >= 18 ? 1 : 0); pads.visible = step >= 21; showPadsLine(step >= 21); showO2(step >= 18); compress(false);
     { const c = step >= 21 ? CART_NEAR : CART_HOME; cart.position.set(c[0], 0, c[1]); }
+    setInj(step >= 5 && step <= 26 ? INJ_USED : 0);           // CT 打過對比劑之後：推桿停在打到一半（IV loss）
+    ctLaserOn = step === 4; ctScanOn = step >= 5 && step <= 7; mriScanOn = step === 5 || step === 6;   // MRI：送進磁體、躁動時還在掃描；立即停止就熄
+    defibOn = step >= 21 && step <= 26; defibAnalyze = false;   // 電擊器：貼片貼上後螢幕亮   // CT：定位時雷射亮、掃描時光環亮
+    lampMode = step === 12 || step === 13 ? "af" : step >= 14 && step <= 26 ? "arrest" : null;   // 監視器警示燈（第 15 頁 TRM 回顧之後不閃）
     if (step < 12) vitals("normal", 78); else if (step === 12) vitals("af", 40); else if (step === 13) vitals("af", 40); else vitals("arrest", 0);
     if (step >= 8) {                                   // 第 11 頁：CT 病人退出機架（第 9 步才退出）；MRI 安妮在床上（已退出磁體）
       if (step >= 9) { sp.position.x = SP_LIE.pos[0]; setLineDX(0); }
@@ -1267,6 +1496,7 @@ export function createWorld(canvas) {
     // 姿勢：走路時會自動換成走路動作，停下來才擺出這些姿勢
     for (const m of [...crew, sp, ...team999]) setPose(m, "stand");
     for (const m of crew) if (m.userData.person) m.userData.person.headYaw = 0;
+    if (sp.userData.person) sp.userData.person.sitK = undefined;   // 上 CT 床動畫中途換頁：坐姿彎腿程度歸位
     if (step >= 2 && step < 22) setPose(sp, "lie");                       // 兒子躺在 CT 床上
     if (ms === 1 || ms === 2) { setPose(crew[3], "wand"); gsap.killTweensOf(wandSweep); wandSweep.a = 0; }   // 瑞益拿探測棒
     if (step >= 9 && step <= 11) setPose(crew[2], "phone");              // MRI：聯絡臨床醫師
@@ -1312,12 +1542,12 @@ export function createWorld(canvas) {
     if (step === 12) A(B.af, 372, 30, 349);
     if (step === 13) A(B.out, 319, 20, 330);
     if (step === 14) A(B.arrest, 296, 30, 330);
-    if (step === 15) A(B.call1, 328, 16, 322);                 // 放在安妮腳邊，不要蓋住瑞益拍肩
+    if (step === 15) A(B.call1, 325.8, 20, 330.3);              // 拉近鏡頭時落在動作上方，不蓋住瑞益拍肩
     if (step === 16) A(B.call999, 357, 26, 335);
-    if (step === 17) A(B.cpr, 315, 22, 337);
-    if (step === 18) A(B.bvm, 304, 22, 330);
-    if (step === 20) A(B.handoff, 328, 24, 342);
-    if (step === 21) A(B.pads, 334, 22, 332);
+    if (step === 17) A(B.cpr, 322.8, 20, 332.1);
+    if (step === 18) A(B.bvm, ...BADGE_BVM);
+    if (step === 20) A(B.handoff, 351.6, 6, 349.7);              // 拉近鏡頭時放在畫面左上（標示較長，放遠一點變小）
+    if (step === 21) A(B.pads, ...BADGE_PADS);
     if (step >= 22 && step <= 25) A(B.leader, crew[1].position.x, 25, crew[1].position.z);
     if (step === 22) { A(B.sonUpset, 380, 36, 248); A(B.calmCT, 378, 26, 256); }
     if (step === 23) A(B.runOut, 370, 30, 246);
@@ -1340,22 +1570,39 @@ export function createWorld(canvas) {
     if (ms === 1 || ms === 2) {
       // 放射師拿起探測棒，從安妮頭部掃到腳
       putAt(crew[3], M_B); wandHand.visible = false; standWand.visible = true; B.detect.visible = false;
-      walk(tl, crew[3], [325, 320], [[338, 352]], 0.2, [338, 370]);
+      walk(tl, crew[3], M_B.slice(0, 2), [[338, 322], [338, 352]], 0.2, [338, 370]);   // 從推床北側繞過床頭去拿探測棒
       tl.call(() => { standWand.visible = false; wandHand.visible = true; }, null, ">+0.2");
-      walk(tl, crew[3], [338, 352], [[338, 322], [309, 322]], tl.duration() + 0.3, [309, 340]);
+      walk(tl, crew[3], [338, 352], [[338, 322], [329, 322]], tl.duration() + 0.3, [329, 340]);   // 從頭部開始
       tl.call(() => { B.detect.visible = true; }, null, ">");
-      tl.to(crew[3].position, { x: 331, duration: 3.2, ease: "sine.inOut", onUpdate: () => over(B.detect, crew[3]) }, ">");
+      tl.to(crew[3].position, { x: M_B_SWEPT[0], duration: 3.2, ease: "sine.inOut", onUpdate: () => over(B.detect, crew[3]) }, ">");
       tl.fromTo(wandSweep, { a: -0.35 }, { a: 0.35, duration: 0.4, repeat: 7, yoyo: true, ease: "sine.inOut" }, "<");
     }
     if (step === 2) {
       // CT：病人先躺上 CT 床 → 護理師到工作台拿針具、回來打上針頭 → 接上對比劑管路
       standSP(); putAt(sp, CT_SP); putAt(crew[0], CT_RAD); putAt(crew[1], CT_NURSE);
       ivMark.visible = false; lineDraw(0); B.line.visible = false;
-      const lie = { k: 0 }, p0 = sp.position.clone();
-      tl.to(lie, { k: 1, duration: 1.6, ease: "power2.inOut", onUpdate: () => {
-        sp.position.lerpVectors(p0, new THREE.Vector3(...SP_LIE.pos), lie.k);
-        sp.rotation.set(SP_LIE.rot[0] * lie.k, sp.rotation.y * (1 - lie.k), SP_LIE.rot[2] * lie.k);
-      } }, 0.2);
+      // 兒子上 CT 床：走到床邊背對檢查台 → 坐上床緣（雙腿垂下）→ 身體往後躺、雙腿抬上床伸直
+      const SEAT = [398, 243.6], SIT_Y = -1.74, SIT_Z = 240.3, PS = sp.userData.person;
+      setPose(sp, "stand");
+      walk(tl, sp, CT_SP.slice(0, 2), [SEAT], 0.2, [SEAT[0], SEAT[1] + 10]);
+      const tS = tl.duration(), sit = { k: 0 }, lie = { k: 0 };
+      tl.call(() => { setPose(sp, "sit"); if (PS) PS.sitK = 0; }, null, tS + 0.05);
+      tl.to(sit, { k: 1, duration: 0.8, ease: "power2.inOut", onUpdate: () => {            // 坐下：往後挪到床緣、腿慢慢彎
+        if (PS) PS.sitK = sit.k; sp.position.y = SIT_Y * sit.k; sp.position.z = SEAT[1] + (SIT_Z - SEAT[1]) * sit.k;
+      } }, tS + 0.05);
+      const qL = new THREE.Quaternion().setFromEuler(new THREE.Euler(...SP_LIE.rot)), pL = new THREE.Vector3(...SP_LIE.pos);
+      let q0 = null, off = null, pelS = null, pelL = null; const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
+      tl.to(lie, { k: 1, duration: 1.8, ease: "power2.inOut", onUpdate: () => {              // 躺下：以臀部為支點（臀部貼著床面），上身往後倒、轉成頭朝機架，腿抬上床伸直
+        if (!q0) {
+          q0 = sp.quaternion.clone(); sp.updateMatrixWorld(true);
+          const pw = PS?.bones?.pelvis ? PS.bones.pelvis.b.getWorldPosition(new THREE.Vector3()) : sp.position.clone().add(new THREE.Vector3(0, 11.6, 0));
+          off = sp.worldToLocal(pw.clone()); pelS = pw; pelL = pL.clone().add(off.clone().applyQuaternion(qL));
+        }
+        _q.slerpQuaternions(q0, qL, lie.k); sp.quaternion.copy(_q);
+        _p.lerpVectors(pelS, pelL, lie.k); _p.y += Math.sin(Math.PI * lie.k) * 0.3;
+        sp.position.copy(_p).sub(off.clone().applyQuaternion(_q));
+        if (PS) PS.sitK = 1 - lie.k;
+      }, onComplete: () => { setPose(sp, "lie"); if (PS) PS.sitK = undefined; } }, tS + 1.1);
       walk(tl, crew[0], [386, 255], [[408, 251]], 0.4, [408, 238]);
       walk(tl, crew[1], [375, 247], [[340, 222], [328, 218]], 0, [324, 212]);
       const back = tl.duration() + 0.6;
@@ -1376,6 +1623,7 @@ export function createWorld(canvas) {
       putAt(crew[0], CT_RAD_LIE); putAt(crew[1], CT_NURSE_IV); lieSP(); setLineDX(0);
       walk(tl, crew[0], [408, 251], [[372, 252], [349, 251], [347, 226]], 0, [360, 226]);
       walk(tl, crew[1], [407, 227.5], [[372, 247], [350, 248], [347, 237]], 0.3, [360, 237]);
+      ctLaserOn = false; tl.call(() => { ctLaserOn = true; }, null, 2.6);   // 送進機架前打開定位雷射
       const sIn = { x: 0 };
       tl.to(sIn, { x: SP_IN_DX, duration: 1.8, ease: "power1.inOut", onUpdate: () => { sp.position.x = SP_LIE.pos[0] + sIn.x; setLineDX(Math.round(sIn.x * 4) / 4); } }, 3.2);
       // MRI：2 位放射師把安妮連推床推進 MRI 室 → 過床到 MRI 床 → 回控制台
@@ -1391,26 +1639,32 @@ export function createWorld(canvas) {
       tl.to(push, { t: 1, duration: 6, ease: "power1.inOut", onUpdate: () => {
         const [x, z] = at(push.t); stretcher.position.set(x, 0, z);
         crew[3].position.set(x - 16, 0, z); crew[2].position.set(x + 17, 0, z); face(crew[3], x, z); face(crew[2], x, z);
-        waitMon.position.set(x + MON_DX, 0, z);
+        const mo = monOff(Math.max(0, (push.t - 0.82) / 0.18)); waitMon.position.set(x + mo[0], 0, z + mo[1]);   // 快到 MRI 床時監視器移到推床東南側
       } }, t0);
       tl.call(() => { scene.attach(annie); }, null, t0 + 6.3);
       const tr = { k: 0 }; let from = null;
       tl.to(tr, { k: 1, duration: 1.6, ease: "power2.inOut", onUpdate: () => {
         if (annie.parent !== scene) scene.attach(annie);
-        from ||= { p: annie.position.clone(), ry: annie.rotation.y };
+        if (!from) {                                       // attach 後的角度可能是 (π, 0, π) 這種等價寫法：先換成單純的水平朝向
+          const e = new THREE.Euler().setFromQuaternion(annie.quaternion, "YXZ"); annie.rotation.set(0, e.y, 0);
+          from = { p: annie.position.clone(), ry: e.y };
+        }
         annie.position.set(from.p.x + (ANNIE_TABLE[0] - from.p.x) * tr.k, from.p.y + (ANNIE_TABLE[1] - from.p.y) * tr.k + Math.sin(Math.PI * tr.k) * 3, from.p.z + (ANNIE_TABLE[2] - from.p.z) * tr.k);
-        annie.rotation.y = from.ry + (Math.PI - from.ry) * tr.k;
+        annie.rotation.y = from.ry + (angTo(from.ry, Math.PI) - from.ry) * tr.k;   // 推床上已經頭朝磁體：直接橫移過床，不轉身
       } }, t0 + 6.4);
       walk(tl, crew[2], [STR_PARK[0] + 17, STR_PARK[1]], [[392, 362], [357, 362], [357, 330]], t0 + 8.3, [380, 330]);
       walk(tl, crew[3], [STR_PARK[0] - 16, STR_PARK[1]], [[379, 360], [357, 360], [357, 342]], t0 + 8.3, [380, 342]);
     }
     const exWalk = (m, from, path, t0, look) => walk(tl, m, from, path, t0, look, 20);
     if (step === 4) EXAM.mri.forEach((m, i) => { putAt(m, EX_SPOT.mriW[i]); exWalk(m, EX_SPOT.mriW[i], [[300 + i * 4, 340], [300 + i * 4, 362], [362, 362], EX_SPOT.mriR[i].slice(0, 2)], 9 + i * 0.6, EX_SPOT.mriR[i][2]); });
-    if (step === 13) EXAM.mri.forEach((m, i) => { putAt(m, EX_SPOT.mriR[i]); exWalk(m, EX_SPOT.mriR[i], [[372 + i * 4, 362], [346, 362], EX_SPOT.mriE[i].slice(0, 2)], 1.2 + i * 0.5, EX_SPOT.mriE[i][2]); });
+    if (step === 13) EXAM.mri.forEach((m, i) => { putAt(m, EX_SPOT.mriR[i]); exWalk(m, EX_SPOT.mriR[i], [[372 + i * 4, 362], [346, 362], [339, 352], EX_SPOT.mriE[i].slice(0, 2)], 1.2 + i * 0.5, EX_SPOT.mriE[i][2]); });
     if (step === 23) EXAM.ct.forEach((m, i) => { putAt(m, EX_SPOT.ct[i]); exWalk(m, EX_SPOT.ct[i], [[380, 236], [340, 246], [306, 250], [302, 300], EX_SPOT.ctE[i].slice(0, 2)], 1.6 + i * 0.6, EX_SPOT.ctE[i][2]); });
     if (step === 5) {                                     // MRI：送進磁體開始掃描
+      const ij = { d: 0 }; setInj(0);                     // CT：打藥機開始注射對比劑（推桿往前、藥液變少）
+      tl.to(ij, { d: INJ_USED, duration: 4.5, ease: "none", onUpdate: () => setInj(ij.d) }, 0.6);
       annieOnTable(ANNIE_TABLE[0]);
       tl.to(annie.position, { x: ANNIE_BORE, duration: 2.4, ease: "power1.inOut" }, 0.2);
+      mriScanOn = false; tl.call(() => { mriScanOn = true; }, null, 2.4);   // 送到定位才開始掃描
     }
     if (step === 6) {                                     // MRI：病人躁動
       annieOnTable(ANNIE_BORE);
@@ -1457,7 +1711,7 @@ export function createWorld(canvas) {
       tl.to(tr, { k: 1, duration: 1.6, ease: "power2.inOut", onUpdate: () => {
         from ||= { p: annie.position.clone(), ry: annie.rotation.y };
         annie.position.set(from.p.x + (dest.x - from.p.x) * tr.k, from.p.y + (dest.y - from.p.y) * tr.k + Math.sin(Math.PI * tr.k) * 3, from.p.z + (dest.z - from.p.z) * tr.k);
-        annie.rotation.y = from.ry * (1 - tr.k);
+        const ry = stretcher.children[0].rotation.y; annie.rotation.y = from.ry + (angTo(from.ry, ry) - from.ry) * tr.k;   // 同方向橫移回推床
       }, onComplete: () => { o.attach(annie); annie.position.set(2, 28, 0); annie.rotation.set(0, 0, 0); annie.scale.setScalar(1); } }, 0.3);
       const BACK = [[395, 349], [392, 356], [319, 356], [319, 330]], segs = []; let tot = 0;
       for (let i = 1; i < BACK.length; i++) { const dd = Math.hypot(BACK[i][0] - BACK[i - 1][0], BACK[i][1] - BACK[i - 1][1]); segs.push(dd); tot += dd; }
@@ -1466,11 +1720,11 @@ export function createWorld(canvas) {
       walk(tl, crew[2], [405, 344], [[411, 349]], 0.3, [395, 349]);
       const push = { t: 0 };
       tl.to(push, { t: 1, duration: 6, ease: "power1.inOut", onUpdate: () => {
-        const [x, z] = at(push.t); stretcher.position.set(x, 0, z); waitMon.position.set(x + MON_DX, 0, z);
+        const [x, z] = at(push.t); stretcher.position.set(x, 0, z); const mo = monOff(Math.max(0, 1 - push.t / 0.18)); waitMon.position.set(x + mo[0], 0, z + mo[1]);
         crew[3].position.set(x - 16, 0, z); crew[2].position.set(x + 17, 0, z); face(crew[3], x - 30, z); face(crew[2], x, z);
       } }, 2.3);
-      walk(tl, crew[3], [303, 330], [[303, 337], [315, 337]], 8.5, [315, 330]);
-      walk(tl, crew[2], [336, 330], [[336, 322], [300, 322], [300, 330]], 8.5, [319, 330]);
+      walk(tl, crew[3], [303, 330], [[303, 337.6], [R_CPR[0], 337.6], R_CPR.slice(0, 2)], 8.5, R_CPR[2]);   // 推床尾（西）→ 胸口旁
+      walk(tl, crew[2], [336, 330], [R_HEAD.slice(0, 2)], 8.5, R_HEAD[2]);                                // 已經在床頭（東）
       tl.call(() => { B.out.visible = true; B.out.position.set(319, 20, 330); }, null, 8.4);
     }
     if (step === 14) { vitals("arrest", 0); pop(B.arrest, 0.2); }
@@ -1480,7 +1734,7 @@ export function createWorld(canvas) {
     }
     if (step === 16) {                                   // 叫：另一位放射師到 MRI 控制台用手機撥 999
       putAt(crew[2], R_HEAD); B.call999.visible = false;
-      walk(tl, crew[2], [300, 330], [[300, 322], [340, 322], [340, 356], [357, 356], [357, 335]], 0.2, [380, 335]);
+      walk(tl, crew[2], R_HEAD.slice(0, 2), [[338, 341], [357, 341], [357, 335]], 0.2, [380, 335]);   // 床頭（東）→ 南邊繞過監視器 → MRI 控制台
       tl.call(() => { B.call999.visible = true; B.call999.position.set(357, 26, 335); }, null, ">");
     }
     if (step === 17) {                                   // 回到胸口旁開始壓胸
@@ -1489,7 +1743,7 @@ export function createWorld(canvas) {
     }
     if (step === 18) {                                   // 撥完 999 → 拿背板、BVM，接上氧氣開到最大
       putAt(crew[2], R_PHONE); board.visible = bvm.visible = false; showO2(false); B.bvm.visible = false;
-      setPose(crew[2], "stand");
+      setPose(crew[2], "stand"); aimDual("mri", CAM_CPR.cartO2, true);                            // 鏡頭先帶到牆邊的急救車＋氧氣鋼瓶
       walk(tl, crew[2], [357, 335], [[357, 356], [340, 356], [312, 356]], 0.2, [312, 364]);           // 走到急救車
       let t = tl.duration();
       tl.call(() => setPose(crew[2], "reach"), null, t + 0.1);                                      // 彎腰拿背板、BVM
@@ -1500,11 +1754,12 @@ export function createWorld(canvas) {
       tl.call(() => { tuckBoard(true); setPose(crew[2], "o2"); }, null, t + 0.1);                // 背板夾腋下、右手轉流量旋鈕
       tl.to(flow, { k: 1, duration: 1.4, ease: "power1.inOut", onUpdate: () => setO2Flow(flow.k) }, t + 0.5);   // 浮球升到最高＝開到最大
       tl.call(() => { tuckBoard(false); setPose(crew[2], "carry"); }, null, t + 2.1);
-      walk(tl, crew[2], [321.1, 360], [[300, 345], [300, 330]], t + 2.4, [319, 330]);              // 搬到床頭
+      camTo(tl, CAM_CPR.head, t + 2.2, 1.8);                                                       // 跟著云玎到床頭
+      walk(tl, crew[2], [321.1, 360], [[338, 348], R_HEAD.slice(0, 2)], t + 2.4, R_HEAD[2]);        // 搬到床頭（東）
       t = tl.duration();
       tl.call(() => { carry.visible = false; setPose(crew[2], "reach"); compress(false); board.visible = true; }, null, t + 0.2);   // 瑞益暫停壓胸，背板從床頭推進安妮背下
       tl.fromTo(board.position, { x: -60 }, { x: -10, duration: 0.8, ease: "power2.out" }, t + 0.2);
-      tl.call(() => { bvm.visible = true; showO2(true); setPose(crew[2], "bvm"); compress(true); B.bvm.visible = true; B.bvm.position.set(304, 22, 330); }, null, t + 1.2);   // BVM 罩上口鼻、繼續壓胸
+      tl.call(() => { bvm.visible = true; showO2(true); setPose(crew[2], "bvm"); compress(true); B.bvm.visible = true; B.bvm.position.set(...BADGE_BVM); }, null, t + 1.2);   // BVM 罩上口鼻、繼續壓胸
     }
     if (step === 19) {                                   // 999 啟動、全院廣播 → 護理師從 CT 室過來支援
       putAt(crew[1], CT_NURSE_IV);
@@ -1512,7 +1767,7 @@ export function createWorld(canvas) {
     }
     if (step === 20) {                                   // 交班：曉鏵走到瑞益身旁點頭聽；瑞益邊壓胸邊轉頭交班；交完曉鏵比手勢接手指揮，回到領導位置
       pop(B.handoff, 0.2); setPose(crew[1], "stand");
-      const N_HAND = [320.6, 340.0], P3 = crew[3].userData.person, hy = { v: 0 }, setHy = () => { if (P3) P3.headYaw = hy.v; };
+      const N_HAND = [R_CPR[0] + 6.1, 340.0], P3 = crew[3].userData.person, hy = { v: 0 }, setHy = () => { if (P3) P3.headYaw = hy.v; };
       walk(tl, crew[1], N_ARRIVE.slice(0, 2), [N_HAND], 0.2, R_CPR.slice(0, 2));
       const t = tl.duration();
       tl.call(() => setPose(crew[1], "nod"), null, t + 0.1);
@@ -1526,23 +1781,28 @@ export function createWorld(canvas) {
       cart.position.set(CART_HOME[0], 0, CART_HOME[1]); pads.visible = false; B.pads.visible = false; showPadsLine(false); setPose(crew[1], "stand");
       const dx = CART_NEAR[0] - CART_HOME[0], dz = CART_NEAR[1] - CART_HOME[1], dist = Math.hypot(dx, dz);
       const off = [N_CART[0] - CART_HOME[0], N_CART[1] - CART_HOME[1]], cartEnd = [CART_NEAR[0] + off[0], CART_NEAR[1] + off[1]];
+      aimDual("mri", CAM_CPR.cartO2, true);                                                       // 鏡頭帶到急救車
       walk(tl, crew[1], N_ARRIVE.slice(0, 2), [N_CART], 0.2, [N_CART[0] + dx, N_CART[1] + dz]);   // 曉鏵走到急救車
       let t = tl.duration();
       tl.call(() => setPose(crew[1], "guide"), null, t + 0.1);                                      // 右手扶車頂
       const mv = { k: 0 };
+      camTo(tl, CAM_CPR.push, t + 0.4, dist / 13 + 0.3);                                           // 跟著推車
       tl.to(mv, { k: 1, duration: dist / 13, ease: "power1.inOut", onUpdate: () => {               // 推著急救車一起走到床邊
         const x = CART_HOME[0] + dx * mv.k, z = CART_HOME[1] + dz * mv.k;
         cart.position.set(x, 0, z); crew[1].position.set(x + off[0], 0, z + off[1]);
       } }, t + 0.4);
       t += 0.4 + dist / 13;
       tl.call(() => setPose(crew[1], "stand"), null, t + 0.1);
-      walk(tl, crew[1], cartEnd, [[336, 345], [336, 323], [N_PADS[0], 323], N_PADS.slice(0, 2)], t + 0.3, N_PADS[2]);   // 繞到推床另一側
+      camTo(tl, CAM_CPR.pads, t + 0.6, 2.2);                                                       // 拉近胸口：貼片、判讀
+      walk(tl, crew[1], cartEnd, [[300, 345], [300, 322], [N_PADS[0], 322], N_PADS.slice(0, 2)], t + 0.3, N_PADS[2]);   // 從床尾（西）繞到推床北側
       t = tl.duration();
       tl.call(() => setPose(crew[1], "pads"), null, t + 0.1);                                       // 彎腰貼上兩片貼片
-      tl.call(() => { pads.visible = true; showPadsLine(true); B.pads.visible = true; B.pads.position.set(334, 22, 332); }, null, t + 0.8);
-      tl.call(() => { compress(false); setPose(crew[3], "stand"); setPose(crew[1], "stand"); }, null, t + 1.6);   // 判讀：所有人手離開病人
-      tl.call(() => { setPose(crew[3], "cpr"); compress(true); }, null, t + 4.0);                  // 不需電擊 → 立刻繼續壓胸
-      walk(tl, crew[1], N_PADS.slice(0, 2), [[N_PADS[0], 323], [336, 323], [336, 342], N_ARRIVE.slice(0, 2)], t + 4.3, N_ARRIVE[2]);   // 回到領導位置
+      defibOn = false; defibAnalyze = false;
+      tl.call(() => { pads.visible = true; showPadsLine(true); B.pads.visible = true; B.pads.position.set(...BADGE_PADS); defibOn = true; }, null, t + 0.8);
+      tl.call(() => { compress(false); setPose(crew[3], "stand"); setPose(crew[1], "stand"); defibAnalyze = true; }, null, t + 1.6);   // 判讀：所有人手離開病人
+      tl.call(() => { setPose(crew[3], "cpr"); compress(true); defibAnalyze = false; }, null, t + 4.0);                  // 不需電擊 → 立刻繼續壓胸
+      camTo(tl, CAM_CPR.wide, t + 4.3, 2.2);                                                       // 繼續壓胸後拉回全景
+      walk(tl, crew[1], N_PADS.slice(0, 2), [[N_PADS[0], 322], [300, 322], [300, 345], N_ARRIVE.slice(0, 2)], t + 4.3, N_ARRIVE[2]);   // 從床尾繞回領導位置
     }
     if (step === 22) {                                   // CT：兒子從 CT 床起身、情緒激動；CT 放射師走過來先安撫
       lieSP(); putAt(crew[0], CT_RAD_LIE); B.sonUpset.visible = B.calmCT.visible = false;
@@ -1593,8 +1853,8 @@ export function createWorld(canvas) {
     if (step === 3) pop(B.teach, 0.3);
     if (ms === 3) {                                       // MRI 人工檢測：瑞益走到安妮頸部旁 → 檢查點一個個亮 → 標出痠痛貼布、暖暖包
       putAt(crew[3], M_B_SWEPT); B.manual.visible = false; checkRings.forEach((r) => { r.visible = false; });
-      walk(tl, crew[3], [331, 322], [[316, 323]], 0.2, [316, 340]);
-      let t = 0.2 + Math.hypot(15, 1) / 22;
+      walk(tl, crew[3], M_B_SWEPT.slice(0, 2), [M_B_MANUAL.slice(0, 2)], 0.2, M_B_MANUAL[2]);
+      let t = 0.2 + Math.hypot(M_B_MANUAL[0] - M_B_SWEPT[0], 1) / 22;
       tl.call(() => { B.manual.visible = true; over(B.manual, crew[3]); }, null, t);
       B.trapPatch.visible = B.trapWarmer.visible = false;
       checkRings.forEach((r, i) => { t += i ? 0.35 : 0.1; tl.call(() => { r.visible = true; }, null, t); });
@@ -1634,6 +1894,10 @@ export function createWorld(canvas) {
     }
     updateWand();
     animateDevices(now);
+    updateLamp(now);
+    updateCT(now);
+    updateMRI(now);
+    updateDefib(now);
     brief.update();
     if (dualOn) updateCables();
     if (pov) povUpdate();
@@ -1666,5 +1930,5 @@ export function createWorld(canvas) {
   const EXAM_BOUNDS = [294, 207, 438, 368];
 
   setLooks(true);
-  return { showProps, lights: { hemi, sun }, setLooks, setLite, isLite: () => lite, setDebrief, setDebriefTimer, THREE, renderer, scene, camera, setScreen, fadeToLive, setDoorScene, setDoorView, setDual, renderDual, isDual: () => dualOn || !!doorView, aimDual, dualCam, setDualSplit, BRIEF_COUNT: brief.count, setLayer, highlight, showRoute, placeFig, frame, setLive, setAudience, setExamWalls, obstacles, EXAM_BOUNDS, LIVE_POSE, FP_START, ROOMS, mapPt };
+  return { labelFade, showProps, lights: { hemi, sun }, setLooks, setLite, isLite: () => lite, setDebrief, setDebriefTimer, THREE, renderer, scene, camera, setScreen, fadeToLive, setDoorScene, setDoorView, setDual, renderDual, isDual: () => dualOn || !!doorView, aimDual, dualCam, setDualSplit, BRIEF_COUNT: brief.count, setLayer, highlight, showRoute, placeFig, frame, setLive, setAudience, setExamWalls, obstacles, EXAM_BOUNDS, LIVE_POSE, FP_START, ROOMS, mapPt };
 }

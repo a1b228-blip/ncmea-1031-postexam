@@ -20,19 +20,46 @@ const load1 = (id, onProgress) => {
 // 會把後腦勺內側畫到臉上（臉變黑、出現色塊）。改成「鏤空」：透明處挖掉、其餘實心，前後就不會錯亂；
 // 皮膚、眼睛、鞋子再改成只畫正面（不會看到模型內側）。整份模型只修一次，複製出來的人物共用。
 const FRONT_ONLY = /(^|\.)(body|high-poly|shoes\d*)$/i;
+// 衣服疊層：彎腰時皮膚會從上衣透出來、上衣下襬和褲子互相穿插（出現白斑）→ 畫的時候上衣最優先、褲子其次（深度偏移，模型不變）
+const TOP = /t-shirt|shirt|cardigan|scrub|jacket|coat|sweater|blouse|top/i, BOTTOM = /pants|trousers|jeans|skirt/i;
 function fixMaterials(gltf) {
   const seen = new Set();
   gltf.scene.traverse((o) => {
     if (!o.isMesh) return;
+    const layer = TOP.test(o.name) ? 2 : BOTTOM.test(o.name) ? 1 : 0;
     for (const m of [].concat(o.material)) {
       if (!m || seen.has(m)) continue; seen.add(m);
+      if (layer) { m.polygonOffset = true; m.polygonOffsetFactor = m.polygonOffsetUnits = -layer; m.needsUpdate = true; }
       if (!m.transparent) continue;
       m.transparent = false; m.depthWrite = true; m.alphaTest = 0.5;
       if (FRONT_ONLY.test(m.name)) m.side = THREE.FrontSide;
       m.needsUpdate = true;
     }
   });
+  tuckShirt(gltf);
   return gltf;
+}
+// 上衣紮進褲子：上衣下襬原本垂在褲頭外 10 公分左右，彎腰時兩層互相穿插（褲子上出現白斑）。
+// 把褲頭以下的上衣下襬往身體中心收 7%（約 1.4 公分），褲子就一直蓋在外面。長版外套（醫師）不動。
+const TUCK_TOP = /t-shirt|scrub|shirt|blouse/i, TUCK_SKIP = /cardigan|coat|jacket|dress/i;
+function tuckShirt(gltf) {
+  const ms = []; gltf.scene.traverse((o) => { if (o.isMesh) ms.push(o); });
+  const pants = ms.find((o) => BOTTOM.test(o.name)), tops = ms.filter((o) => TUCK_TOP.test(o.name) && !TUCK_SKIP.test(o.name));
+  if (!pants || !tops.length) return;
+  const pp = pants.geometry.attributes.position; let top = -Infinity;
+  for (let i = 0; i < pp.count; i++) top = Math.max(top, pp.getY(i));
+  let cx = 0, cz = 0, n = 0;                                  // 褲頭那一圈的中心（前後左右）
+  for (let i = 0; i < pp.count; i++) if (pp.getY(i) > top - 0.04) { cx += pp.getX(i); cz += pp.getZ(i); n++; }
+  cx /= n; cz /= n;
+  for (const t of tops) {
+    const p = t.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i); if (y > top + 0.005) continue;
+      const w = Math.min(1, (top + 0.005 - y) / 0.025), k = 1 - 0.07 * w;   // 褲頭附近 2.5 公分慢慢收進去
+      p.setX(i, cx + (p.getX(i) - cx) * k); p.setZ(i, cz + (p.getZ(i) - cz) * k);
+    }
+    p.needsUpdate = true; t.geometry.computeBoundingSphere();
+  }
 }
 const load = (id, onProgress, tries = 3) => load1(id, onProgress).catch((e) => (tries > 1 ? new Promise((r) => setTimeout(r, 800)).then(() => load(id, onProgress, tries - 1)) : Promise.reject(e)));
 export const loadPerson = load;
@@ -129,11 +156,74 @@ export function makePerson(id, { label = true, tint = null } = {}) {
       bones[o.name] = { b: o, rest: o.quaternion.clone(), toParent: qp };
     });
     P.bones = bones;
+    try { dress(P, m); } catch (e) { console.warn("配件失敗：", id, e); }
   }).catch((e) => console.warn("人物載入失敗：", id, e));
   all.push(P);
   return g;
 }
 export const setPose = (g, pose) => { const P = g?.userData?.person; if (P) P.pose = pose; };
+
+// ---------- 衣服細節：識別證、胸前口袋＋筆、放射師的輻射劑量配章、護理師掛錶、考官識別證掛繩 ----------
+// 在模型剛載入（標準站姿）時，從人物正前方往胸口打射線，找到衣服表面，把配件貼上去再掛到胸口骨頭（spine_03）上，之後彎腰、壓胸都會跟著動。不放文字。
+const RADIO = { badge: 1, pocket: 1, dosi: 1 }, NURSE = { badge: 1, pocket: 1, watch: 1 }, EXAMINER = { lanyard: 1 }, STAFF = { badge: 1 };
+const DRESS = { examiner: EXAMINER, examiner2: EXAMINER, examiner3: EXAMINER, examiner4: EXAMINER };   // 使用者指定：只留考官的掛繩識別證（放射師、護理師、醫師、隊員都不放配件）
+const AM = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5, ...o });
+const ACC = { white: AM(0xf8fafc), blue: AM(0x1d4ed8), photo: AM(0x94a3b8), dark: AM(0x334155), silver: AM(0xcbd5e1, { metalness: 0.6, roughness: 0.3 }),
+  pen1: AM(0x111827), pen2: AM(0x1d4ed8), dosi: AM(0xe5e7eb), orange: AM(0xf97316), strap: AM(0x1e3a8a), green: AM(0x15803d) };
+const bx = (w, h, d, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); return o; };
+function badgeMesh(head) {                                 // 識別證：白卡＋上方色條＋照片位置＋夾子（+z 朝外）
+  const g = new THREE.Group();
+  g.add(bx(0.68, 1.0, 0.04, ACC.white), bx(0.68, 0.2, 0.05, head, 0, 0.4, 0.005), bx(0.26, 0.32, 0.05, ACC.photo, -0.13, 0.05, 0.005), bx(0.2, 0.12, 0.06, ACC.dark, 0, 0.56, 0));
+  return g;
+}
+function dress(P, m) {
+  const want = DRESS[P.id]; if (!want) return;
+  const g = P.g, spine = P.bones.spine_03?.b; if (!spine) return;
+  g.updateWorldMatrix(true, true);
+  const skins = []; m.traverse((o) => { if (o.isSkinnedMesh && !/eyebrow|eyelash|eye|teeth|tongue|hair/i.test(o.name + (o.material?.name || ""))) { o.skeleton.update(); o.computeBoundingSphere(); skins.push(o); } });
+  const hc = g.worldToLocal(spine.getWorldPosition(new THREE.Vector3())).y;   // 胸口高度（人物座標）
+  const ray = new THREE.Raycaster(), nm = new THREE.Matrix3();
+  const hit = (y, z) => {                                    // 人物座標：面向 +x、右手 +z
+    const o = g.localToWorld(new THREE.Vector3(8, y, z)), d = g.localToWorld(new THREE.Vector3(-1, y, z)).sub(o).normalize();
+    ray.set(o, d); const h = ray.intersectObjects(skins, false)[0]; if (!h) return null;
+    const n = h.face.normal.clone().applyMatrix3(nm.getNormalMatrix(h.object.matrixWorld)).normalize();
+    if (n.dot(d) > 0) n.negate();
+    return { p: h.point, n, mat: h.object.material };
+  };
+  const put = (obj, y, z, lift = 0.04) => {                 // 貼到衣服表面、正面朝外，再掛到胸口骨頭
+    const h = hit(y, z); if (!h) return null;
+    obj.position.copy(h.p).addScaledVector(h.n, lift); obj.lookAt(h.p.clone().addScaledVector(h.n, 2));
+    obj.updateMatrixWorld(true); spine.attach(obj); return h;
+  };
+  if (want.pocket) {                                         // 左胸口袋：口袋上緣縫線＋兩支筆露出筆夾
+    const seamM = new THREE.MeshStandardMaterial({ color: 0x0f172a, transparent: true, opacity: 0.35 }), bodyM = new THREE.MeshStandardMaterial({ color: 0x0f172a, transparent: true, opacity: 0.1 });
+    put(bx(1.35, 1.35, 0.01, bodyM), hc + 0.08, -1.25, 0.015);                 // 口袋輪廓（淡淡一塊）
+    put(bx(1.35, 0.07, 0.02, seamM), hc + 0.75, -1.25, 0.025);                 // 口袋上緣縫線
+    for (const [dz, mt] of [[-0.28, ACC.pen1], [0.02, ACC.pen2]]) {           // 兩支筆只露出口袋上緣的筆蓋與筆夾
+      const pen = new THREE.Group(); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.4, 10), mt); c.position.y = 0.2; pen.add(c, bx(0.035, 0.28, 0.04, ACC.silver, 0, 0.2, 0.065));
+      put(pen, hc + 0.72, -1.25 + dz, 0.06);
+    }
+  }
+  if (want.badge) put(badgeMesh(ACC.blue), hc - 0.4, -1.25, 0.05);    // 識別證夾在口袋下緣
+  if (want.dosi) { const d = new THREE.Group(); d.add(bx(0.4, 0.5, 0.1, ACC.dosi), bx(0.24, 0.16, 0.11, ACC.orange, 0, 0.08, 0.005), bx(0.16, 0.1, 0.12, ACC.dark, 0, 0.28, 0)); put(d, hc + 1.35, 1.15, 0.06); }   // 放射師：輻射劑量配章（右上胸、靠領口）
+  if (want.watch) {                                          // 護理師：胸前掛錶
+    const w = new THREE.Group(); const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 24), ACC.silver); body.rotation.x = Math.PI / 2;
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.24, 24), AM(0xfde7c8)); face.position.z = 0.06;                   // 米色錶面＋指針（跟白上衣分得開）
+    const hh = bx(0.03, 0.14, 0.01, ACC.dark, 0, 0.06, 0.065), mh = bx(0.025, 0.2, 0.01, ACC.dark, 0.06, 0.03, 0.066); mh.rotation.z = -1.1;
+    w.add(body, face, hh, mh, bx(0.08, 0.35, 0.05, ACC.silver, 0, 0.42, 0));
+    put(w, hc + 0.55, 1.2, 0.06);
+  }
+  if (want.lanyard) {                                        // 考官：掛繩＋識別證（胸前正中）
+    const b = badgeMesh(ACC.green), h = put(b, hc - 0.85, 0, 0.06);
+    if (h) for (const s of [-1, 1]) {
+      const top = hit(hc + 2.9, s * 0.8); if (!top) continue;                    // 掛繩往上到脖子兩側
+      const a = b.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.5, 0)).addScaledVector(h.n, 0.02), c = top.p.clone().addScaledVector(top.n, 0.06);
+      const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, a.distanceTo(c), 8), ACC.strap);
+      strap.position.copy(a).add(c).multiplyScalar(0.5); strap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize());
+      strap.updateMatrixWorld(true); spine.attach(strap);
+    }
+  }
+}
 // 某根骨頭的世界座標（模型還沒載入時回傳 null）
 export function boneWorld(g, name, out) { const B = g?.userData?.person?.bones?.[name]; return B ? B.b.getWorldPosition(out) : null; }
 export const personOf = (g) => g?.userData?.person;
@@ -151,7 +241,7 @@ function rotate(P, name, rots) {
 }
 const TUNE = {}; if (typeof window !== "undefined") window.__poseTune = TUNE;
 // 拍肩姿勢（數值用骨頭位置算到雙手落在安妮兩肩）
-const TAP = { L: { up: -0.337, out: -0.369, tw: 0.4, el: -1.457 }, R: { up: -1.7, out: 0.053, tw: 0.419, el: 0.05 }, spine: 0.9, neck: [0.3, 0.45] };
+const TAP = { R: { up: -0.337, out: -0.369, tw: 0.4, el: -1.457 }, L: { up: -1.7, out: 0.053, tw: 0.419, el: 0.05 }, spine: 0.9, neck: [0.3, -0.45] };   // 安妮頭朝東：左右手對調（鏡像）
 if (typeof window !== "undefined") window.__tap = TAP;
 // 搬背板＋BVM：右手垂下抓背板上緣（背板夾在右側）、左手在胸前拿 BVM
 const CARRY = { R: { up: 0.05, out: 0.22, el: -0.1 }, L: { up: -0.7, out: 0.1, tw: 0.3, el: -1.3 } };
@@ -160,7 +250,7 @@ const O2R = { up: -1.167, out: 0.389, tw: 0.3, el: -1.31 };   // 轉氧氣流量
 if (typeof window !== "undefined") window.__o2r = O2R;
 // 推急救車（右手扶車）、貼電擊貼片（雙手各按一片）：數值用骨頭位置算出來
 const GUIDE = { up: 0.041, out: -0.066, tw: 0.075, el: -1.575 };
-const PADS = { L: { up: -0.916, out: -0.026, tw: 0, el: -0.576 }, R: { up: -0.993, out: -0.314, tw: 0, el: -0.532 }, spine: 0.55 };
+const PADS = { L: { up: -1.652, out: 0.176, tw: 0, el: -0.998 }, R: { up: -1.178, out: 0.295, tw: 0, el: -1.601 }, spine: 1.1 };   // 安妮頭朝東：左手右上胸（北）、右手左側胸（南）
 if (typeof window !== "undefined") { window.__guide = GUIDE; window.__pads = PADS; }
 // 姿勢表：手臂往前抬＝繞 X 負角度；往外張＝左手繞 Z 正角度、右手繞 Z 負角度；手肘彎＝繞 X 負角度；彎腰＝繞 X 正角度
 function arms(P, t) {
@@ -170,7 +260,7 @@ function arms(P, t) {
   if (w < 0.5) {
     switch (P.pose) {
       case "phone": R = { up: -1.2, out: 0.37, tw: 0.98, el: -2.33 }; break;            // 手機貼右耳、手肘在側邊（數值用骨頭位置算出來）
-      case "cpr": L = { up: -1.206, out: -0.67, tw: 0.3, el: 0 }; R = { up: -1.143, out: -0.691, tw: 0.3, el: -0.073 }; spine = 0.6 + (P.cprK || 0) * 0.05; break;   // 雙手交疊在胸骨下半段、手臂打直（數值用骨頭位置算出來）；cprK＝壓下的程度
+      case "cpr": R = { up: -1.206, out: -0.67, tw: 0.3, el: 0 }; L = { up: -1.143, out: -0.691, tw: 0.3, el: -0.073 }; spine = 0.6 + (P.cprK || 0) * 0.05; break;   // 雙手交疊在胸骨下半段、手臂打直（數值用骨頭位置算出來）；cprK＝壓下的程度
       case "bvm": L = { up: -0.95, out: -0.05, el: -0.75 }; R = { up: -0.95, out: -0.05, el: -0.75 }; spine = 0.25; break;
       case "calm": L = { up: -0.55, out: 0.1, el: -0.55 + s(t * 3) * 0.12 }; R = { up: -0.55, out: 0.1, el: -0.55 - s(t * 3) * 0.12 }; break;
       case "teach": R = { up: -0.95 + s(t * 2.2) * 0.1, out: 0.12, tw: 0.35, el: -0.85 + s(t * 3) * 0.15 }; L = { up: -0.5, out: 0.05, tw: 0.25, el: -1.2 + s(t * 2.6) * 0.1 }; break;   // 雙手在胸前比劃說明
@@ -200,13 +290,31 @@ function arms(P, t) {
   // tw＝上臂往身體中線轉（水平方向），ey＝前臂往內轉（手往臉靠）；沒寫就是 0
   rotate(P, "upperarm_l", [[X, L.up], [Z, L.out], [Y, -(L.tw || 0)]]); rotate(P, "upperarm_r", [[X, R.up], [Z, -R.out], [Y, R.tw || 0]]);
   rotate(P, "lowerarm_l", [[X, L.el], [Y, -(L.ey || 0)]]); rotate(P, "lowerarm_r", [[X, R.el], [Y, R.ey || 0]]);
+  fingers(P);
   const bow = P.bow * 1.05;
   rotate(P, "spine_01", [[X, spine * 0.5 + bow * 0.45]]); rotate(P, "spine_02", [[X, spine * 0.5 + bow * 0.35]]); rotate(P, "neck_01", [[X, bow * 0.2 + neck[0]], [Y, neck[1]]]);
 }
+// 手指：0＝攤平、1＝握拳。拿東西的姿勢握住（BVM、背板、旋鈕、急救車、手機、夾板、探測棒），其他時候自然微彎
+const GRIP = {
+  bvm: [0.65, 0.65], carry: [0.65, 0.9], o2: [0.65, 0.5], guide: [0.18, 0.55], cpr: [0.3, 0.3],
+  phone: [0.18, 0.75], film: [0.18, 0.75], hold: [0.6, 0.5], score: [0.6, 0.55], wand: [0.18, 0.9],
+  tap: [0.05, 0.05], pads: [0.0, 0.0], stop: [0.18, 0.05], teach: [0.2, 0.2], calm: [0.2, 0.2],
+};
+const FINGERS = ["index", "middle", "ring", "pinky"];
+function fingers(P) {
+  const w = P.walkAmp, g = (w < 0.5 || P.pose === "carry" || P.pose === "wand" || P.pose === "guide") && GRIP[P.pose] || [0.18, 0.18];
+  for (const [side, c, sg] of [["l", g[0], -1], ["r", g[1], 1]]) {
+    if (P.grip?.[side] === c) continue;                      // 沒變就不用重算
+    for (const f of FINGERS) { rotate(P, `${f}_01_${side}`, [[Z, sg * c * 0.8]]); rotate(P, `${f}_02_${side}`, [[Z, sg * c]]); rotate(P, `${f}_03_${side}`, [[Z, sg * c * 0.7]]); }
+    rotate(P, `thumb_01_${side}`, [[Y, sg * c * 0.4]]); rotate(P, `thumb_02_${side}`, [[Y, sg * c * 0.8]]); rotate(P, `thumb_03_${side}`, [[Y, sg * c * 0.6]]);
+    (P.grip ||= {})[side] = c;
+  }
+}
 function legs(P) {
   if (P.pose === "sit" || P.pose === "sitTalk") {
-    rotate(P, "thigh_l", [[X, -1.5]]); rotate(P, "thigh_r", [[X, -1.5]]);
-    rotate(P, "calf_l", [[X, 1.5]]); rotate(P, "calf_r", [[X, 1.5]]);
+    const k = P.sitK ?? 1;                                   // sitK：0＝腿伸直、1＝坐姿（坐下、躺下時用來慢慢彎／伸直）
+    rotate(P, "thigh_l", [[X, -1.5 * k]]); rotate(P, "thigh_r", [[X, -1.5 * k]]);
+    rotate(P, "calf_l", [[X, 1.5 * k]]); rotate(P, "calf_r", [[X, 1.5 * k]]);
     return;
   }
   const w = P.walkAmp, sl = Math.sin(P.phase), sr = -sl;

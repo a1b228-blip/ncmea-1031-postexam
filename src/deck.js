@@ -26,8 +26,8 @@ fit(); addEventListener("resize", fit);
 
 // ---------- 鏡頭站點 ----------
 const POSE = {
-  cover: { pos: [-330, 400, 860], look: [170, 0, 330] },
-  coverStart: { pos: [-470, 560, 1060], look: [170, 0, 340] },
+  cover: { pos: [-100, 360, 600], look: [195, 0, 205] },          // 封面：考場放在畫面右半邊（左邊留給標題）
+  coverStart: { pos: [-250, 540, 810], look: [195, 0, 215] },
   checkin: { pos: [650, 300, 470], look: [830, 0, 105] },
   checkinNear: { pos: [700, 220, 340], look: [805, 0, 80] },
   team: { pos: [290, 360, 480], look: [340, 0, 92] },
@@ -379,7 +379,7 @@ function arrestFx(on, animate) {
     const tl = gsap.timeline(); tl.to(al, { opacity: 0.85, duration: 0.1 }).to(al, { opacity: 0.4, duration: 0.55, ease: "sine.out" }, "+=0.35");
     if (n >= 4) tl.to(al, { opacity: 0.22, duration: 1.5 }, "+=1.2");
   };
-  arrestTl.to(mw, { x: dx, y: dy, scale: 2.3, duration: 0.55, ease: "power3.out" }, 0.15)                     // 監視器放大到畫面中央：看到心跳變成一直線
+  arrestTl.to(mw, { x: dx, y: dy, scale: 3.0, duration: 0.55, ease: "power3.out" }, 0.15)                     // 監視器放大到畫面中央：看到心跳變成一直線
     .to(mw, { x: 0, y: 0, scale: 1, duration: 0.6, ease: "power2.inOut" }, 2.6);
 }
 
@@ -440,6 +440,7 @@ function creditsHook(sl, step, animate) {
   stopCredits();
   const roll = $(".cr-roll", sl), end = $(".cr-end", sl), dim = $(".cr-dim", sl), [top, bot] = $$(".cr-bar", sl), H = roll.offsetHeight;
   const finale = () => { sfx.finale(); fireworks($(".cr-fw", sl)); };
+  const stills = [...sl.querySelectorAll(".cr-stills img")]; gsap.set(stills, { opacity: 0, scale: 1 });
   if (step === 1 || !animate) {                             // 最後一張（→ 跳過捲動，或倒退回來）
     gsap.set(top, { y: 100 }); gsap.set(bot, { y: -100 }); gsap.set(dim, { opacity: 0.55 }); gsap.set(roll, { y: -H - 60 });
     gsap.to(end, { opacity: 1, duration: animate ? 1 : 0 });
@@ -450,8 +451,15 @@ function creditsHook(sl, step, animate) {
   crTl = gsap.timeline();
   crTl.to(top, { y: 100, duration: 1.2, ease: "power2.inOut" }, 0.2).to(bot, { y: -100, duration: 1.2, ease: "power2.inOut" }, 0.2)   // 上下黑邊：電影寬銀幕
     .to(dim, { opacity: 0.55, duration: 3, ease: "sine.inOut" }, 5)                                          // 謝幕鞠躬後，3D 慢慢變暗
-    .to(roll, { y: -H - 60, duration: (900 + H + 60) / 58, ease: "none" }, 5.6)                             // 名單由下往上捲
-    .to(end, { opacity: 1, duration: 1.6, ease: "power2.out" }, ">-0.4")
+    .to(roll, { y: -H - 60, duration: (900 + H + 60) / 58, ease: "none" }, 5.6);                            // 名單由下往上捲
+  const RD = (900 + H + 60) / 58, seg = RD / stills.length;
+  stills.forEach((im, i) => {                              // 劇照：每張輪一段，慢慢推近，前後交疊淡入淡出
+    const t0 = 5.6 + i * seg;
+    crTl.to(im, { opacity: 1, duration: 1.8, ease: "sine.inOut" }, t0)
+      .fromTo(im, { scale: 1 }, { scale: 1.08, duration: seg + 1.8, ease: "none" }, t0)
+      .to(im, { opacity: 0, duration: 1.8, ease: "sine.inOut" }, t0 + seg - (i === stills.length - 1 ? 0.6 : 0));
+  });
+  crTl    .to(end, { opacity: 1, duration: 1.6, ease: "power2.out" }, ">-0.4")
     .call(finale, null, "<0.3");
 }
 const HOOKS = {
@@ -469,6 +477,7 @@ const HOOKS = {
   exam: (sl, step, animate) => {
     if (step === 1) { if (animate) stemCountdown(true); } else if (step === 0) stemCountdown(false);
     $(".side", sl).classList.toggle("done", step >= 3);          // 分組之後收起題幹與考官卡，留位置給分組與標準病人
+    gsap.to($("h2", sl), { opacity: step >= 3 ? 0 : 1, duration: animate ? 0.5 : 0 });   // 讀完題幹、分組進考場後收起「30 秒讀題幹」標題
     sl.dataset.step = step;                                       // 第 4 步只看 MRI、第 5 步左右兩個畫面（鏡頭標籤見 deck.css）
   },
   brief: (sl, step, animate) => gsap.to($("h2", sl), { opacity: step >= 1 && step < W.BRIEF_COUNT ? 0 : 1, duration: animate ? 0.5 : 0 }),  // 推近看投影片時收起標題
@@ -647,7 +656,7 @@ gsap.ticker.add(() => {
   const k = X.active ? 0 : cam.pos.distanceTo(cam.look) / 500;
   camera.position.set(cam.pos.x + Math.sin(t * 0.13) * 7 * k, cam.pos.y + Math.sin(t * 0.21) * 3 * k, cam.pos.z + Math.cos(t * 0.11) * 6 * k);
   camera.lookAt(cam.look);
-  if (W.isDual()) W.renderDual(); else W.renderer.render(W.scene, camera);
+  if (W.isDual()) W.renderDual(); else { W.labelFade(camera); W.renderer.render(W.scene, camera); }
   css3d.render(cssScene, camera);
 });
 render(null, false);
