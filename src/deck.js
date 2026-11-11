@@ -653,12 +653,11 @@ gsap.ticker.add(() => {
 });
 render(null, false);
 gsap.set(slides[0], { opacity: 0 });
-flyTo("cover", false); cam.pos.copy(V(POSE.coverStart.pos)); cam.look.copy(V(POSE.coverStart.look));
-// 封面開場：載入畫面淡出後，鏡頭飛到封面位置
+flyTo("cover", false);                                      // 鏡頭一開始就在封面位置（3D 被封面劇照蓋住，不用再飛進來）
+// 封面開場：按 → 之後音樂響起、劇照開始慢慢推近、下方「按 → 開始」接手
 function intro() {
+  document.body.classList.add("started");
   gsap.to(slides[0], { opacity: 1, duration: 1.2, delay: 0.3 });
-  flight = gsap.to(cam.pos, { x: POSE.cover.pos[0], y: POSE.cover.pos[1], z: POSE.cover.pos[2], duration: 4.5, ease: "power2.out" });
-  gsap.to(cam.look, { x: POSE.cover.look[0], y: POSE.cover.look[1], z: POSE.cover.look[2], duration: 4.5, ease: "power2.out" });
 }
 
 // ---------- 開場載入畫面：全部素材載完才能開始 ----------

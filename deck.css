@@ -14,9 +14,14 @@ html, body { height: 100%; background: #000; color: var(--ink); font-family: var
 body[data-slide="cover"] #shade { opacity: 1; }
 /* 封面主視覺（Blender 劇照）：封面時顯示並慢慢推近，離開封面淡出 */
 #hero { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 1.4s ease; }
-#hero img { width: 100%; height: 100%; object-fit: cover; transform-origin: 32% 50%; }   /* 推近時人物往右飄，離標題遠一點 */
+#hero .hero-in { position: absolute; inset: 0; transform-origin: 32% 50%; }   /* 推近時人物往右飄，離標題遠一點 */
+#hero img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* 動態劇照：床頭監視器的紅色警示光緩緩閃（照片本身不動，只有光） */
+.hero-alarm { position: absolute; inset: 0; mix-blend-mode: screen; opacity: .12; animation: heroAlarm 1.2s ease-in-out infinite alternate;
+  background: radial-gradient(ellipse 38% 58% at 93% 4%, rgba(255, 46, 32, .9), rgba(255, 40, 28, .32) 50%, transparent 78%), radial-gradient(ellipse 24% 34% at 56% 4%, rgba(255, 60, 45, .45), transparent 72%); }
+@keyframes heroAlarm { from { opacity: .12; } to { opacity: .95; } }
 body[data-slide="cover"] #hero { opacity: 1; }
-body[data-slide="cover"] #hero img { animation: heroPush 40s cubic-bezier(.2,.6,.3,1) both; }
+body.started[data-slide="cover"] #hero .hero-in { animation: heroPush 40s cubic-bezier(.2,.6,.3,1) both; }   /* 按 → 開始後才推近 */
 @keyframes heroPush { from { transform: scale(1.0); } to { transform: scale(1.1); } }
 #flash { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; opacity: 0; background: #e0f2fe; z-index: 4; }
 .vignette { position: fixed; left: var(--vx, 0); top: var(--vy, 0); width: var(--vw, 100%); height: var(--vh, 100%); pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(3, 8, 16, 0.75) 100%); }
@@ -64,11 +69,11 @@ h2 em { font-style: normal; color: var(--hl); }
 .kicker { font-size: 24px; letter-spacing: .14em; color: #bae6fd; font-weight: 800; }
 .cover-title h1 { margin-top: 22px; font-size: 118px; line-height: 1.1; font-weight: 900; letter-spacing: .02em; text-shadow: 0 8px 40px rgba(0,0,0,.6); }
 .cover-title h1 span { display: block; }
-.cover-title h1 .hl, .ld-box h1 .hl { color: var(--hl); font-style: normal; }
+.cover-title h1 .hl { color: var(--hl); font-style: normal; }
 .cover-title h1 .sub { margin-top: 18px; font-size: 48px; white-space: nowrap; font-weight: 800; letter-spacing: .04em; line-height: 1.25; }
-.ld-box h1 .sub { margin-top: 1.4vh; font-size: clamp(22px, 3vw, 50px); font-weight: 800; letter-spacing: .04em; }
 .cover-title .speaker { margin-top: 40px; display: flex; align-items: baseline; gap: 18px; font-size: 28px; font-weight: 700; color: var(--muted); letter-spacing: .08em; }
 .cover-title .speaker::before { content: ""; width: 56px; height: 3px; background: var(--hl); align-self: center; border-radius: 2px; }
+.cover-title .org { margin-top: 10px; padding-left: 74px; font-size: 24px; font-weight: 700; color: var(--muted); letter-spacing: .1em; }   /* 對齊黃線後面的文字 */
 .cover-title .speaker b { font-size: 36px; font-weight: 900; color: #fff; letter-spacing: .12em; }
 .cover-title .lead { margin-top: 26px; font-size: 30px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
 .start-hint { position: absolute; left: 0; right: 0; bottom: 70px; text-align: center; font-size: 20px; color: var(--dim); letter-spacing: .2em; }
@@ -254,20 +259,17 @@ h2.small { font-size: 38px; top: 84px; }
 .credits .cr-fw { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
 
 /* 開場載入畫面（全部素材載完才顯示「按 → 開始」） */
-#loader { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at 30% 35%, #12305a 0%, #081322 60%, #050c18 100%); transition: opacity 1s ease; }
-#loader.hide { opacity: 0; pointer-events: none; }
-.ld-box { width: min(78vw, 900px); }
-.ld-box h1 { margin: 2.2vh 0 5vh; font-size: clamp(44px, 6.4vw, 110px); line-height: 1.1; font-weight: 900; letter-spacing: .02em; }
-.ld-box h1 span { display: block; } .ld-box h1 .hl { color: var(--hl); }
-.ld-box .kicker { font-size: clamp(13px, 1.4vw, 24px); }
-.ld-bar { height: 10px; border-radius: 99px; background: rgba(56, 189, 248, .14); overflow: hidden; }
-.ld-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--mri)); box-shadow: 0 0 16px var(--cyan); transition: width .3s; }
-.ld-row { display: flex; justify-content: space-between; margin-top: 14px; font-size: clamp(14px, 1.3vw, 22px); color: var(--muted); letter-spacing: .1em; }
-.ld-pct { color: #fff; font-variant-numeric: tabular-nums; }
-.ld-warn { min-height: 1.6em; margin-top: 10px; font-size: clamp(13px, 1.1vw, 18px); color: #fca5a5; }
-.ld-go { margin-top: 4vh; text-align: center; font-size: clamp(16px, 1.5vw, 26px); letter-spacing: .2em; color: #fff; opacity: 0; transition: opacity .6s; }
+#loader { position: fixed; inset: 0; z-index: 20; pointer-events: none; transition: opacity 1s ease; }   /* 透明：一打開就是封面，載入進度只在下方 */
+#loader.hide { opacity: 0; }
+.ld-box { position: absolute; left: var(--vx, 0px); width: var(--vw, 100vw); top: calc(var(--vy, 0px) + var(--vh, 100vh) * .865); text-align: center; --u: calc(var(--vw, 100vw) / 1600); }
+.ld-bar { width: calc(var(--u) * 360); height: calc(var(--u) * 3); margin: 0 auto; border-radius: 99px; background: rgba(148, 163, 184, .22); overflow: hidden; transition: opacity .6s; }
+.ld-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--mri)); box-shadow: 0 0 10px var(--cyan); transition: width .3s; }
+.ld-row { width: calc(var(--u) * 360); margin: calc(var(--u) * 10) auto 0; display: flex; justify-content: space-between; font-size: calc(var(--u) * 15); color: var(--dim); letter-spacing: .12em; transition: opacity .6s; }
+.ld-pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ld-warn { position: absolute; left: 0; right: 0; bottom: calc(100% + var(--u) * 14); font-size: calc(var(--u) * 18); color: #fca5a5; }
+.ld-go { position: absolute; left: 0; right: 0; top: calc(var(--u) * 22); font-size: calc(var(--u) * 20); letter-spacing: .2em; color: var(--dim); opacity: 0; transition: opacity .6s; }   /* 跟封面的「按 → 開始」同一個位置、同樣大小 */
+#loader.ready .ld-bar, #loader.ready .ld-row { opacity: 0; }
 #loader.ready .ld-go { opacity: 1; animation: ldPulse 2s ease-in-out infinite .6s; }
-#loader.ready .ld-bar i { background: linear-gradient(90deg, var(--wait), var(--cyan)); }
 @keyframes ldPulse { 50% { opacity: .45; } }
 
 /* 小提示（效能模式切換等），畫面下方中央，幾秒後消失 */

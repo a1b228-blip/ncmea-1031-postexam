@@ -9,7 +9,7 @@
 </head>
 <body data-slide="cover">
 <canvas id="stage"></canvas>
-<div id="hero"><img src="assets/cover/hero.jpg" alt=""></div><!-- 封面主視覺：Blender 算的急救那一幕；換到第 2 頁時淡出，接回 3D 考場 -->
+<div id="hero"><div class="hero-in"><img src="assets/cover/hero.jpg" alt=""><i class="hero-alarm"></i></div></div><!-- 封面主視覺：Blender 算的急救那一幕；換到第 2 頁時淡出，接回 3D 考場 -->
 <div id="shade"></div>
 <div id="flash"></div>
 <div id="alarm"></div><!-- 第 12 頁心跳停止：畫面四周泛紅（跟著監視器警報閃） -->
@@ -23,6 +23,7 @@
       <div class="kicker">NCMEA 醫事放射組第二場｜2026.10.31 林口長庚</div>
       <h1><span>從模擬到<em class="hl">實戰</em></span><span class="sub">情境模擬競賽中的教學技巧與團隊學習</span></h1>
       <p class="speaker"><span>放射診斷科</span><b>江瑞益</b><span>放射師</span></p>
+      <p class="org">奇美醫療財團法人佳里奇美醫院</p>
     </div>
     <div class="start-hint f">按 <kbd>→</kbd> 開始</div>
   </section>
@@ -400,11 +401,9 @@
 <div id="progress"><i></i></div>
 <div id="toast"></div>
 
-<!-- 開場載入畫面：人物、音樂、影片全部載完才顯示「按 → 開始」 -->
+<!-- 開場載入：背景透明，一打開就是封面（劇照＋標題）；下方一條細線顯示進度，載完換成「按 → 開始」 -->
 <div id="loader">
   <div class="ld-box">
-    <div class="kicker">NCMEA 醫事放射組第二場｜2026.10.31 林口長庚</div>
-    <h1><span>從模擬到<em class="hl">實戰</em></span><span class="sub">情境模擬競賽中的教學技巧與團隊學習</span></h1>
     <div class="ld-bar"><i></i></div>
     <div class="ld-row"><span class="ld-msg">載入中</span><b class="ld-pct">0%</b></div>
     <div class="ld-warn"></div>
