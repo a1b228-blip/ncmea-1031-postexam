@@ -440,7 +440,6 @@ function creditsHook(sl, step, animate) {
   stopCredits();
   const roll = $(".cr-roll", sl), end = $(".cr-end", sl), dim = $(".cr-dim", sl), [top, bot] = $$(".cr-bar", sl), H = roll.offsetHeight;
   const finale = () => { sfx.finale(); fireworks($(".cr-fw", sl)); };
-  const stills = [...sl.querySelectorAll(".cr-stills img")]; gsap.set(stills, { opacity: 0, scale: 1 });
   if (step === 1 || !animate) {                             // 最後一張（→ 跳過捲動，或倒退回來）
     gsap.set(top, { y: 100 }); gsap.set(bot, { y: -100 }); gsap.set(dim, { opacity: 0.55 }); gsap.set(roll, { y: -H - 60 });
     gsap.to(end, { opacity: 1, duration: animate ? 1 : 0 });
@@ -451,15 +450,8 @@ function creditsHook(sl, step, animate) {
   crTl = gsap.timeline();
   crTl.to(top, { y: 100, duration: 1.2, ease: "power2.inOut" }, 0.2).to(bot, { y: -100, duration: 1.2, ease: "power2.inOut" }, 0.2)   // 上下黑邊：電影寬銀幕
     .to(dim, { opacity: 0.55, duration: 3, ease: "sine.inOut" }, 5)                                          // 謝幕鞠躬後，3D 慢慢變暗
-    .to(roll, { y: -H - 60, duration: (900 + H + 60) / 58, ease: "none" }, 5.6);                            // 名單由下往上捲
-  const RD = (900 + H + 60) / 58, seg = RD / stills.length;
-  stills.forEach((im, i) => {                              // 劇照：每張輪一段，慢慢推近，前後交疊淡入淡出
-    const t0 = 5.6 + i * seg;
-    crTl.to(im, { opacity: 1, duration: 1.8, ease: "sine.inOut" }, t0)
-      .fromTo(im, { scale: 1 }, { scale: 1.08, duration: seg + 1.8, ease: "none" }, t0)
-      .to(im, { opacity: 0, duration: 1.8, ease: "sine.inOut" }, t0 + seg - (i === stills.length - 1 ? 0.6 : 0));
-  });
-  crTl    .to(end, { opacity: 1, duration: 1.6, ease: "power2.out" }, ">-0.4")
+    .to(roll, { y: -H - 60, duration: (900 + H + 60) / 58, ease: "none" }, 5.6)                             // 名單由下往上捲
+    .to(end, { opacity: 1, duration: 1.6, ease: "power2.out" }, ">-0.4")
     .call(finale, null, "<0.3");
 }
 const HOOKS = {

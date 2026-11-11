@@ -242,9 +242,6 @@ h2.small { font-size: 38px; top: 84px; }
 .credits .cr-dim { position: absolute; left: -2000px; right: -2000px; top: -2000px; bottom: -2000px; background: #02060d; opacity: 0; }
 .credits .cr-bar { position: absolute; left: -2000px; right: -2000px; height: 2000px; background: #000; z-index: 2; }   /* 電影黑邊蓋在名單上面：名單捲進黑邊後就看不到 */
 .credits .cr-bar.top { bottom: 100%; } .credits .cr-bar.bot { top: 100%; }
-.credits .cr-stills { position: absolute; inset: 0; overflow: hidden; }
-.credits .cr-stills::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 18%, rgba(2,6,13,.62) 38%, rgba(2,6,13,.62) 62%, transparent 82%); }   /* 中間名單經過的那一條再壓暗 */
-.credits .cr-stills img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; filter: brightness(.5) saturate(.9); will-change: transform, opacity; }   /* 壓暗：名單字要看得清楚 */
 .credits .cr-roll { position: absolute; left: 0; right: 0; top: 0; text-align: center; will-change: transform; z-index: 1; }
 .cr-head { font-size: 64px; font-weight: 900; letter-spacing: .3em; color: var(--hl); text-shadow: 0 0 30px rgba(252,211,77,.35); }
 .cr-sub { margin-top: 18px; font-size: 26px; font-weight: 600; letter-spacing: .14em; color: var(--muted); }
