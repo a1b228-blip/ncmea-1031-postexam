@@ -205,8 +205,13 @@ export const sfx = {
 
 // ---------- 背景音樂（Pixabay 免費授權，見 assets/music/授權紀錄.md） ----------
 // 各曲響度不同（-11 ～ -18 LUFS），GAIN 先把它們拉到差不多大聲；LEVEL＝整體背景音樂音量（壓在音效下面）
-const GAIN = { "01_opening": 0.62, "02_flow": 0.46, "03_countdown": 0.71, "04_exam": 0.85, "05_worse": 0.67, "06_emergency": 0.74, "07_review": 1, "08_credits": 0.48 };
-const LEVEL = 0.45, FADE = 1.6;
+const GAIN = { "01_opening": 0.62, "02_flow": 0.46, "02c_explore": 0.46, "02d_waiting": 1.05, "03_countdown": 0.71, "04_exam": 0.85, "05_worse": 0.67, "06_emergency": 0.74, "07_review": 1, "08_credits": 0.48 };
+const LEVEL = 0.45, FADE = 3;
+// 各曲的調（五度圈位置，以關係大調表示；程式分析估計）：相鄰兩首差超過 2 格，交疊時容易聽起來走音
+// → 不同時響：舊曲先收掉，新曲晚一點才進來
+const FIFTHS = { "01_opening": -5, "02_flow": -1, "02c_explore": 0, "02d_waiting": -4, "03_countdown": -4, "04_exam": -1, "05_worse": -3, "06_emergency": -2, "07_review": -1, "08_credits": 0 };
+const clash = (a, b) => { if (FIFTHS[a] == null || FIFTHS[b] == null) return false; const d = (((FIFTHS[a] - FIFTHS[b]) % 12) + 12) % 12; return Math.min(d, 12 - d) > 2; };
+const lastStop = {};
 const tracks = {};
 let curName = null, curLevel = 1, ducked = false;
 const track = (name) => {
@@ -218,12 +223,14 @@ const track = (name) => {
   return tracks[name];
 };
 // 音量平滑變化：用一般計時器（分頁在背景時畫面更新會暫停，但音量仍要能淡入淡出）
-function fadeTo(a, v, dur = FADE, onDone) {
-  clearInterval(a._fade); a._target = v;
+// curve：換曲時用等功率曲線（淡出走 cos、淡入走 sin），交疊中間不會忽然變小聲或變大聲
+function fadeTo(a, v, dur = FADE, onDone, curve) {
+  clearInterval(a._fade); clearTimeout(a._wait); a._target = v;
   const from = a.volume, t0 = performance.now();
+  const shape = curve === "out" ? (k) => 1 - Math.cos(k * Math.PI / 2) : curve === "in" ? (k) => Math.sin(k * Math.PI / 2) : (k) => k;
   const step = () => {
     const k = Math.min(1, (performance.now() - t0) / (dur * 1000));
-    a.volume = Math.max(0, Math.min(1, from + (v - from) * k));
+    a.volume = Math.max(0, Math.min(1, from + (v - from) * shape(k)));
     if (k >= 1) { clearInterval(a._fade); onDone?.(); }
   };
   a._fade = setInterval(step, 30); step();
@@ -233,16 +240,21 @@ function routeTrack(a) { if (!ctx || a._routed) return; a._routed = true; ctx.cr
 const want = (name) => (muted ? 0 : GAIN[name] * LEVEL * curLevel * (ducked ? 0.2 : 1));
 export const bgm = {
   // 切換到某一段音樂（交叉淡入淡出）；level＝這一段的相對音量；restart＝從頭播
-  set(name, { level = 1, restart = false, fade = FADE } = {}) {
-    const same = name === curName;
+  set(name, { level = 1, restart = false, fade } = {}) {
+    const same = name === curName, prev = curName;
     curLevel = level;
-    if (!same && curName) { const old = track(curName); fadeTo(old, 0, fade, () => { if (curName !== old._name) old.pause(); }); }
+    const apart = !same && prev && name && fade == null && clash(prev, name);   // 調差很多：先收舊曲、再進新曲
+    const out = fade ?? (apart ? 2 : FADE);
+    if (!same && prev) { const old = track(prev); fadeTo(old, 0, out, () => { if (curName !== old._name) { old.pause(); lastStop[old._name] = performance.now(); } }, "out"); }
     curName = name;
     if (!name) return;
     const a = track(name); a._name = name;
-    if (restart && !same) a.currentTime = 0;
+    // 從頭播：指定要從頭，或這首已經超過 30 秒沒播（往前推進到新段落時從前奏自然進場；只倒退一下又回來則接著播）
+    if (!same && (restart || (lastStop[name] && performance.now() - lastStop[name] > 30000))) a.currentTime = 0;
     if (a.paused) a.play().then(() => { bgm.started = true; }).catch(() => {});   // 瀏覽器規定：第一次按鍵前不能出聲
-    fadeTo(a, want(name), same ? 0.8 : FADE);
+    if (same) return fadeTo(a, want(name), 0.8);
+    if (apart) { clearInterval(a._fade); a.volume = Math.min(a.volume, 0.02); a._wait = setTimeout(() => { if (curName === name) fadeTo(a, want(name), 2.6, null, "in"); }, 1300); }
+    else fadeTo(a, want(name), fade ?? FADE, null, "in");
   },
   started: false,
   // 除錯用：目前每首的播放狀態與音量

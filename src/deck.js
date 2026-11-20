@@ -142,11 +142,12 @@ const SLIDES = {
   trm: { split: 0, steps: [27, 28, 29, 30, 31].map((d, i) => ({ dual: d, ...(i ? {} : { audience: false }) })) },
   // 第 16 頁：ISBAR 五個交班時機（重播當時那一幕；dual 32–37 由 world.js 的 ISBAR_VIEW 對應）
   isbar: { split: 0, steps: [32, 33, 34, 35, 36, 37].map((d) => ({ dual: d })) },
-  // 考點總整理：鏡頭俯瞰考場（考場在畫面右邊），每按一下亮一條考點，對應的房間跟著亮（MRI 第 3～5 條發生在等候區）
+  // 考點總整理：第一下俯瞰考場；之後每按一下亮一條考點，背景重現當時那一幕（dual 50–56 由 world.js 的 POINTS_VIEW 對應）
   points: {
+    split: 0,
     steps: [
       { dual: null, door: null, cam: "points", hl: [], routes: [], audience: false },
-      { hl: ["ct"] }, { hl: ["ct"] }, { hl: ["mri"] }, { hl: ["mri"] }, { hl: ["wait"] }, { hl: ["wait"] }, { hl: ["wait"] },
+      ...[50, 51, 52, 53, 54, 55, 56].map((d) => ({ dual: d })),
     ],
   },
   // 第 17 頁：電影片尾（進頁自動播：謝幕鞠躬 → 名單捲動 → 結語＋煙火；→ 直接跳到最後一張）
@@ -351,7 +352,9 @@ function listHook(sl, step) {
 function musicCue(id, step) {
   switch (id) {
     case "cover": return ["01_opening"];                                    // ① 開場
-    case "exam": return step === 0 ? ["02_flow"] : step <= 2 ? ["03_countdown"] : ["04_exam"];   // ③ 讀題幹 30 秒 → 分組進考場
+    case "explore": return ["02c_explore"];                                 // ②-c 第一人稱看考場（探索感）
+    case "back": return ["02d_waiting"];                                    // ②-d 回入闈教室討論情境：緊張但比讀題幹輕；和倒數音樂同調，接起來順
+    case "exam": return step === 0 ? ["02d_waiting"] : step <= 2 ? ["03_countdown"] : ["04_exam"];   // ③ 走到考場門口（延續等待）→ 讀題幹 30 秒 → 分組進考場
     case "scan": return ["04_exam", step === 1 || step === 2 ? 0.7 : 1];      // ④ 考試進行（掃描聲出現時音樂稍微讓開）
     case "dual": case "handle": return ["04_exam"];                         // ④ 考試進行
     case "arrest": return step === 2 ? [null, 1, false, 0.25] : ["05_worse", step ? 0.6 : 0.8];   // ⑤ 病況惡化：心跳停止那一刻音樂切掉，只剩監視器警報
@@ -359,7 +362,7 @@ function musicCue(id, step) {
     case "family": return ["06_emergency", step >= 4 ? 0.5 : 1];             //    999 團隊到場後慢慢收掉
     case "debrief": case "trm": case "isbar": case "points": return ["07_review"];         // ⑦-a Debrief、回顧
     case "credits": return ["08_credits", 1, true];                          // ⑦-b 片尾（每次進來從頭播）
-    default: return ["02_flow"];                                             // ② 當天流程（第 2–7 頁）
+    default: return ["02_flow"];                                             // ② 當天流程（第 2–5 頁：報到、入闈、觀摩教室、考官說明；使用者指定第 5 頁沿用同一首）
   }
 }
 

@@ -1303,6 +1303,17 @@ export function createWorld(canvas) {
     36: { src: 10, cam: { pos: [310, 110, 308], look: [328, 4, 234] }, show: ["callCT"] },             // 4 CT IV loss：跟臨床交班
     37: { src: 11, cam: { pos: [310, 110, 308], look: [328, 4, 234] }, show: ["teachIV"] },            // 5 IV loss 後續：衛教
   };
+  // 第 18 頁考點總整理：每條考點背景重現當時那一幕（做法同 ISBAR；考點卡片在左半邊，鏡頭讓場景落在右半邊）
+  // src：當時那一步（數字＝兩邊同一步；[CT, MRI]＝兩邊步驟不同）
+  const POINTS_VIEW = {
+    50: { src: 9, cam: { pos: [356, 70, 300], look: [372, 6, 238] }, show: [] },          // 1 CT：確認 IV loss
+    51: { src: 6, cam: { pos: [300, 46, 254], look: [374, 8, 210] }, show: [] },          // 2 CT：影像上沒有藥物進來（從西邊看控制台的人＋機架）
+    52: { src: [1, 2], cam: { pos: [294, 52, 366], look: [296, 4, 322] }, show: [] },     // 3 MRI 等候區：瑞益拿金屬探測器
+    53: { src: 7, cam: { pos: [348, 88, 404], look: [348, 4, 334] }, show: [] },          // 4 MRI 室：躁動、立即停止掃描（控制台＋磁體）
+    54: { src: 18, cam: { pos: [304, 58, 372], look: [314, 6, 330] }, show: [] },         // 5 等候區：急救團隊分工
+    55: { src: 24, cam: { pos: [298, 64, 370], look: [302, 6, 318] }, show: [] },         // 6 等候區：兒子衝進來大鬧、鼎晨安撫
+    56: { src: 26, cam: { pos: [300, 82, 382], look: [298, 4, 324] }, show: ["handoff999"] },   // 7 等候區：護理師跟急救團隊交班
+  };
   // 第 17 頁片尾：所有人物在等候區推床南邊排成一排、面向鏡頭鞠躬，鏡頭再像升降臂一樣慢慢拉高
   const CUR_LOW = { pos: [319, 72, 400], look: [319, 10, 343] }, CUR_HIGH = { pos: [300, 300, 540], look: [325, 0, 300] };
   function curtain(step, animate) {
@@ -1395,10 +1406,10 @@ export function createWorld(canvas) {
     if (step === 45) return filmScene(animate);         // 第 14 頁：兒子拿手機偷拍 → CT 放射師制止
     if (step === 43) return setDualCore(1, animate, 2);   // CT 解釋檢查｜MRI 另一位同仁看 X 光＋瑞益同步金屬探測器
     if (step === 44) return setDualCore(2, animate, 3);   // CT 躺床打針｜MRI 人工檢測
-    const iv = ISBAR_VIEW[step];
+    const iv = ISBAR_VIEW[step] || POINTS_VIEW[step];
     if (!iv) return setDualCore(step, animate);
     const a = dualAim.mri, p0 = a.p.clone(), l0 = a.l.clone(), wasOn = dualOn;
-    setDualCore(iv.src, false); lampMode = null; ctLaserOn = ctScanOn = mriScanOn = false; defibAnalyze = false;      // 人物、道具直接到當時那一步的位置（不重播走路）；ISBAR 回顧時警示燈不閃
+    const [cs, ms] = [].concat(iv.src); setDualCore(cs, false, ms ?? cs); lampMode = null; ctLaserOn = ctScanOn = mriScanOn = false; defibAnalyze = false;      // 人物、道具直接到當時那一步的位置（不重播走路）；ISBAR 回顧時警示燈不閃
     if (animate && wasOn) gsap.fromTo(document.getElementById("flash"), { opacity: 0.55 }, { opacity: 0, duration: 0.6, ease: "power2.out" });   // 跳到另一個時間點：白光轉場
     if (animate && wasOn) { a.p.copy(p0); a.l.copy(l0); aimDual("mri", iv.cam, true); } else aimDual("mri", iv.cam, false);
     for (const b of Object.values(B)) b.visible = false;
@@ -1420,7 +1431,12 @@ export function createWorld(canvas) {
     if (!pov || !boneWorld(crew[3], "head", _ph)) return;
     if (!boneWorld(sp, "head", _pt)) _pt.set(sp.position.x, 21, sp.position.z);
     _pf.subVectors(_pt, _ph).setY(0).normalize();
-    _pt.y = _ph.y - 9;                                                           // 視線中心往下約 14 度：上方看得到兒子的頭、下方看得到安妮胸口與自己壓胸的手
+    {                                                                            // 視線依兒子的頭自動抬高：臉落在畫面上方約 1/4 處（原本固定往下看，兒子靠近時頭被畫面上緣切掉）
+      const hd = Math.max(1, Math.hypot(_pt.x - _ph.x, _pt.z - _ph.z));
+      const up = Math.atan2(_pt.y - _ph.y, hd);                                  // 兒子頭部的仰角
+      const c = Math.min(0, Math.max(-0.6, up - 0.38));                          // 視線中心比兒子的頭低約 22 度（畫面上下各 39 度）
+      _pt.y = _ph.y + Math.tan(c) * hd;
+    }
     dualAim.mri.p.copy(_ph).addScaledVector(_pf, 1.8); dualAim.mri.p.y += 0.8 - crew[3].position.y * 0.5;   // 眼睛在頭骨前上方；壓胸的上下晃動減半
     dualAim.mri.l.copy(_pt);
   }
