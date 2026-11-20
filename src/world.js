@@ -997,9 +997,6 @@ export function createWorld(canvas) {
   { const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 2.4, 8), mat(0xf8fafc)); tube.rotation.z = Math.PI / 2; ivMark.add(tube);
     const tape = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 1.8), mat(0xfde68a)); tape.position.y = 0.3; ivMark.add(tape); }
   ivMark.position.set(0.6, 9.5, 3.5); ivMark.visible = false; sp.add(ivMark);
-  const swell = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.55, toneMapped: false }));
-  swell.position.set(0.6, 9.5, 3.9); swell.visible = false; sp.add(swell);
-  gsap.to(swell.scale, { x: 1.3, y: 1.3, z: 1.3, duration: 0.7, repeat: -1, yoyo: true, ease: "sine.inOut" });
   // CT 病人躺上 CT 床（頭朝機架、面朝上）；留置針在靠北側的手臂
   const SP_LIE = { pos: [398, 10.65, 237.6], rot: [Math.PI, 0, -Math.PI / 2] };   // 背部貼齊床面（床面 y＝9），腳跟在床尾內
   const IV_AT = new THREE.Vector3(407.5, 11.25, 234.1);
@@ -1463,7 +1460,7 @@ export function createWorld(canvas) {
         if (doorModeNow === "split" || doorModeNow === "spToCT") { B.formsMRI.visible = doorModeNow === "split"; B.formsCT.visible = doorModeNow === "spToCT"; }   // 倒退回第 8 頁：遞單標籤留著
         checkRings.forEach((r) => { r.visible = false; });
         wandHand.visible = false; standWand.visible = true; ivMark.visible = false; mriScreen.material.map = homeTex;
-        standSP(); lineDraw(0); setLineDX(0); annieHome(); swell.visible = false; trapsOnAnnie();
+        standSP(); lineDraw(0); setLineDX(0); annieHome(); trapsOnAnnie();
         board.visible = bvm.visible = pads.visible = false; showO2(false); compress(false); vitals("normal", 78); cart.position.set(CART_HOME[0], 0, CART_HOME[1]);
       }
       return;
@@ -1482,7 +1479,6 @@ export function createWorld(canvas) {
     lineDraw(step >= 2 ? 1 : 0);
     if (step >= 4) annieOnTable(step === 5 || step === 6 ? ANNIE_BORE : ANNIE_TABLE[0]); else annieHome();
     if (step === 6) annieJitter = gsap.to(annie.rotation, { x: 0.06, z: 0.05, duration: 0.18, repeat: -1, yoyo: true, ease: "sine.inOut" });   // 病人躁動
-    swell.visible = step >= 9;
     // 第 12、13 頁
     board.visible = bvm.visible = step >= 18; board.position.x = -10; carry.visible = false; tuckBoard(false); setO2Flow(step >= 18 ? 1 : 0); pads.visible = step >= 21; showPadsLine(step >= 21); showO2(step >= 18); compress(false);
     { const c = step >= 21 ? CART_NEAR : CART_HOME; cart.position.set(c[0], 0, c[1]); }
@@ -1698,13 +1694,13 @@ export function createWorld(canvas) {
       tl.call(() => { B.lookMRI.visible = true; }, null, ">");
     }
     if (step === 9) {                                    // CT：病人退出機架，進去詢問 → 手部腫痛，確認 IV Loss；MRI：回控制台聯絡臨床醫師
-      sp.position.x = SP_LIE.pos[0] + SP_IN_DX; setLineDX(SP_IN_DX); swell.visible = false; B.swell.visible = false;
+      sp.position.x = SP_LIE.pos[0] + SP_IN_DX; setLineDX(SP_IN_DX); B.swell.visible = false;
       putAt(crew[0], CT_RAD_CON); putAt(crew[1], CT_NURSE_CON);
       const sOut = { x: SP_IN_DX };
       tl.to(sOut, { x: 0, duration: 1.8, ease: "power1.inOut", onUpdate: () => { sp.position.x = SP_LIE.pos[0] + sOut.x; setLineDX(Math.round(sOut.x * 4) / 4); } }, 0.2);
       walk(tl, crew[0], [347, 226], [[349, 251], [372, 252], [408, 251]], 0.4, [408, 238]);
       walk(tl, crew[1], [347, 237], [[345, 216], [380, 222], [407, 227.5]], 0.4, [407, 238]);
-      tl.call(() => { swell.visible = true; B.swell.visible = true; B.swell.position.set(400, 24, 230); }, null, ">+0.3");
+      tl.call(() => { B.swell.visible = true; B.swell.position.set(400, 24, 230); }, null, ">+0.3");
       putAt(crew[2], M_A_SIDE); B.callMRI.visible = false;
       walk(tl, crew[2], [405, 344], [[390, 358], [357, 358], [357, 330]], 0.3, [380, 330]);
       tl.call(() => { B.callMRI.visible = true; B.callMRI.position.set(366, 30, 336); }, null, 0.3 + 3.6);
@@ -1909,6 +1905,7 @@ export function createWorld(canvas) {
       bvm.userData.bag.scale.set(2.1 + q * 0.15, 1 - q * 0.38, 1 - q * 0.25);
     }
     updateWand();
+    if (ivMark.visible) ivMark.children.forEach((c) => { c.visible = Math.abs(sp.rotation.x) > 2.5; });   // 留置針位置是照躺姿擺的：站起來（起身途中）就藏起來
     animateDevices(now);
     updateLamp(now);
     updateCT(now);
