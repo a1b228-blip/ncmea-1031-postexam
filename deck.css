@@ -70,6 +70,7 @@ h2 em { font-style: normal; color: var(--hl); }
 .cover-title h1 { margin-top: 22px; font-size: 118px; line-height: 1.1; font-weight: 900; letter-spacing: .02em; text-shadow: 0 8px 40px rgba(0,0,0,.6); }
 .cover-title h1 span { display: block; }
 .cover-title h1 .hl { color: var(--hl); font-style: normal; }
+.cover-title h1 .main { font-size: 104px; white-space: nowrap; }   /* 主標 8 個字：縮一點才放得進一行 */
 .cover-title h1 .sub { margin-top: 18px; font-size: 48px; white-space: nowrap; font-weight: 800; letter-spacing: .04em; line-height: 1.25; }
 .cover-title .speaker { margin-top: 40px; display: flex; align-items: baseline; gap: 18px; font-size: 28px; font-weight: 700; color: var(--muted); letter-spacing: .08em; }
 .cover-title .speaker::before { content: ""; width: 56px; height: 3px; background: var(--hl); align-self: center; border-radius: 2px; }
